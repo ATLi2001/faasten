@@ -185,6 +185,15 @@ fn main() {
                 .required(false)
                 .help("If present, VMM will load the regions contained in diff_dirs[0]/WS only effective when there is one diff snapshot.")
         )
+        .arg(
+            Arg::with_name("db server address")
+                .value_name("[ADDR:]PORT")
+                .long("db_listen")
+                .takes_value(true)
+                .required(false)
+                .default_value("127.0.0.1:7878")
+                .help("Address on which database listens")
+        )
         .get_matches();
 
     if cmd_arguments.is_present("enable network") {
@@ -210,6 +219,7 @@ fn main() {
         cmdline: cmd_arguments.value_of("kernel_args").map(|s| s.to_string()),
         dump_ws: cmd_arguments.is_present("dump working set"),
         load_ws: cmd_arguments.is_present("load working set"),
+        db_server_address: cmd_arguments.value_of("db server address").expect("db server address").to_string(),
     };
     let id = cmd_arguments.value_of("id").unwrap().parse::<usize>().unwrap();
     let odirect = snapfaas::vm::OdirectOption {
@@ -221,8 +231,7 @@ fn main() {
     let firerunner = cmd_arguments.value_of("firerunner").unwrap().to_string();
     let allow_network = cmd_arguments.is_present("enable network");
 
-
-    let my_db = DbServer::new("127.0.0.1:7878".to_string());
+    let my_db = DbServer::new(vm_app_config.db_server_address.clone());
     DbServer::start_dbserver(my_db);
 
     // Launch a vm based on the FunctionConfig value

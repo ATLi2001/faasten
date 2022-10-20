@@ -406,11 +406,12 @@ impl Vm {
     }
 
     fn process_syscalls(&mut self) -> Result<String, Error> {
-        use lmdb::{Transaction, WriteFlags};
+        use lmdb::Transaction;
         use prost::Message;
         use std::io::Read;
         use syscalls::syscall::Syscall as SC;
         use syscalls::Syscall;
+        use std::net::TcpStream;
 
 
         let default_db = DBENV.open_db(None);
@@ -437,27 +438,24 @@ impl Vm {
                     let result = syscalls::InvokeResponse { success: self.send_req(invoke) };
                     self.send_into_vm(result.encode_to_vec())?;
                 }
-                Some(SC::ReadKey(rk)) => {
-                    let txn = DBENV.begin_ro_txn().unwrap();
-                    let result = syscalls::ReadKeyResponse {
-                        value: txn.get(default_db, &rk.key).ok().map(Vec::from),
-                    }
-                    .encode_to_vec();
-                    let _ = txn.commit();
+                Some(SC::ReadKey(_)) | Some(SC::WriteKey(_)) => {
+                    match TcpStream::connect(self.function_config.db_server_address.clone()) {
+                        Ok(mut stream) => {
+                            stream.write_all(&(buf.len() as u32).to_be_bytes())?;
+                            stream.write_all(buf.as_ref())?;
 
-                    self.send_into_vm(result)?;
-                },
-                Some(SC::WriteKey(wk)) => {
-                    let mut txn = DBENV.begin_rw_txn().unwrap();
-                    let result = syscalls::WriteKeyResponse {
-                        success: txn
-                            .put(default_db, &wk.key, &wk.value, WriteFlags::empty())
-                            .is_ok(),
-                    }
-                    .encode_to_vec();
-                    let _ = txn.commit();
+                            let mut lenbuf = [0;4];
+                            stream.read_exact(&mut lenbuf)?;
+                            let size = u32::from_be_bytes(lenbuf);
+                            let mut result = vec![0u8; size as usize];
+                            stream.read_exact(&mut result)?;
 
-                    self.send_into_vm(result)?;
+                            self.send_into_vm(result)?;
+                        },
+                        Err(e) => {
+                            return Err(Error::VsockListen(e));
+                        }
+                    }
                 },
                 Some(SC::ReadDir(req)) => {
                     use lmdb::Cursor;

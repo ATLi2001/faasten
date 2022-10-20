@@ -152,6 +152,8 @@ pub struct FunctionConfig {
     /// load the working set
     #[serde(default)]
     pub load_ws: bool,
+    /// db server address
+    pub db_server_address: String,
 }
 
 impl Default for FunctionConfig {
@@ -172,6 +174,7 @@ impl Default for FunctionConfig {
             dump_dir: None,
             dump_ws: false,
             load_ws: false,
+            db_server_address: String::new(),
         }
     }
 }
