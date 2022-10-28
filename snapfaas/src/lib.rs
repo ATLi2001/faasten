@@ -12,7 +12,7 @@ pub mod metrics;
 pub mod firecracker_wrapper;
 pub mod blobstore;
 pub mod labeled_fs;
-pub mod db_server;
+pub mod distributed_db;
 
 use std::string::String;
 use std::fs::{self, File};

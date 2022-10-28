@@ -19,6 +19,7 @@ use crate::message::Message;
 use crate::{blobstore, syscalls};
 use crate::request::Request;
 use crate::labeled_fs::{self, DBENV};
+use crate::distributed_db;
 
 const MACPREFIX: &str = "AA:BB:CC:DD";
 const GITHUB_REST_ENDPOINT: &str = "https://api.github.com";
@@ -411,7 +412,6 @@ impl Vm {
         use std::io::Read;
         use syscalls::syscall::Syscall as SC;
         use syscalls::Syscall;
-        use std::net::TcpStream;
 
 
         let default_db = DBENV.open_db(None);
@@ -438,24 +438,13 @@ impl Vm {
                     let result = syscalls::InvokeResponse { success: self.send_req(invoke) };
                     self.send_into_vm(result.encode_to_vec())?;
                 }
-                Some(SC::ReadKey(_)) | Some(SC::WriteKey(_)) => {
-                    match TcpStream::connect(self.function_config.db_server_address.clone()) {
-                        Ok(mut stream) => {
-                            stream.write_all(&(buf.len() as u32).to_be_bytes())?;
-                            stream.write_all(buf.as_ref())?;
-
-                            let mut lenbuf = [0;4];
-                            stream.read_exact(&mut lenbuf)?;
-                            let size = u32::from_be_bytes(lenbuf);
-                            let mut result = vec![0u8; size as usize];
-                            stream.read_exact(&mut result)?;
-
-                            self.send_into_vm(result)?;
-                        },
-                        Err(e) => {
-                            return Err(Error::VsockListen(e));
-                        }
-                    }
+                Some(SC::ReadKey(rk)) =>{
+                    let result = distributed_db::read_key(self.function_config.db_server_address.clone(), rk.key).unwrap();
+                    self.send_into_vm(result)?;
+                }
+                Some(SC::WriteKey(wk)) => {
+                    let result = distributed_db::write_key(self.function_config.db_server_address.clone(), wk.key, wk.value).unwrap();
+                    self.send_into_vm(result)?;
                 },
                 Some(SC::ReadDir(req)) => {
                     use lmdb::Cursor;

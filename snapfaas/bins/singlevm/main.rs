@@ -5,7 +5,7 @@ extern crate clap;
 /// the request to VM, waits for VM's response and finally prints the response
 /// to stdout, kills the VM and exits.
 use snapfaas::vm::Vm;
-use snapfaas::db_server::DbServer;
+use snapfaas::distributed_db::db_server::DbServer;
 use snapfaas::unlink_unix_sockets;
 use snapfaas::configs::FunctionConfig;
 use std::io::{BufRead};
