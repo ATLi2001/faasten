@@ -8,7 +8,7 @@ use std::string::String;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc;
 use std::io::{Seek, Write};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use log::{debug, error};
 use tokio::process::{Child, Command};
@@ -407,7 +407,6 @@ impl Vm {
     }
 
     fn process_syscalls(&mut self) -> Result<String, Error> {
-        use lmdb::Transaction;
         use prost::Message;
         use std::io::Read;
         use syscalls::syscall::Syscall as SC;
@@ -447,32 +446,7 @@ impl Vm {
                     self.send_into_vm(result)?;
                 },
                 Some(SC::ReadDir(req)) => {
-                    use lmdb::Cursor;
-                    let mut keys: HashSet<Vec<u8>> = HashSet::new();
-
-                    let txn = DBENV.begin_ro_txn().unwrap();
-                    {
-                        let mut dir = req.dir;
-                        if !dir.ends_with(b"/") {
-                            dir.push(b'/');
-                        }
-                        let mut cursor = txn.open_ro_cursor(default_db).or(Err(Error::RootfsNotExist))?.iter_from(&dir);
-                        while let Some(Ok((key, _))) = cursor.next() {
-                            if !key.starts_with(&dir) {
-                                break
-                            }
-                            if let Some(entry) = key.split_at(dir.len()).1.split_inclusive(|c| *c == b'/').next() {
-                                if !entry.is_empty() {
-                                    keys.insert(entry.into());
-                                }
-                            }
-                        }
-                    }
-                    let _ = txn.commit();
-
-                    let result = syscalls::ReadDirResponse {
-                        keys: keys.drain().collect(),
-                    }.encode_to_vec();
+                    let result = distributed_db::read_dir(self.function_config.db_server_address.clone(), req.dir).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsRead(req)) => {

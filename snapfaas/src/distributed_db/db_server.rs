@@ -1,4 +1,5 @@
 use std::net::{TcpListener, TcpStream};
+use std::collections::HashSet;
 
 use lmdb::Database;
 
@@ -87,35 +88,36 @@ impl DbServer {
 
                 self.send_response(stream, result)?;
             },
-            // Some(SC::ReadDir(req)) => {
-            //     use lmdb::Cursor;
-            //     let mut keys: HashSet<Vec<u8>> = HashSet::new();
+            Some(SC::ReadDir(req)) => {
+                use lmdb::Cursor;
+                let mut keys: HashSet<Vec<u8>> = HashSet::new();
 
-            //     let txn = DBENV.begin_ro_txn().unwrap();
-            //     {
-            //         let mut dir = req.dir;
-            //         if !dir.ends_with(b"/") {
-            //             dir.push(b'/');
-            //         }
-            //         let mut cursor = txn.open_ro_cursor(default_db).or(Err(Error::RootfsNotExist))?.iter_from(&dir);
-            //         while let Some(Ok((key, _))) = cursor.next() {
-            //             if !key.starts_with(&dir) {
-            //                 break
-            //             }
-            //             if let Some(entry) = key.split_at(dir.len()).1.split_inclusive(|c| *c == b'/').next() {
-            //                 if !entry.is_empty() {
-            //                     keys.insert(entry.into());
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     let _ = txn.commit();
+                let txn = DBENV.begin_ro_txn().unwrap();
+                {
+                    let mut dir = req.dir;
+                    if !dir.ends_with(b"/") {
+                        dir.push(b'/');
+                    }
+                    let mut cursor = txn.open_ro_cursor(self.db).or(Err(Error::RootfsNotExist))?.iter_from(&dir);
+                    while let Some(Ok((key, _))) = cursor.next() {
+                        if !key.starts_with(&dir) {
+                            break
+                        }
+                        if let Some(entry) = key.split_at(dir.len()).1.split_inclusive(|c| *c == b'/').next() {
+                            if !entry.is_empty() {
+                                keys.insert(entry.into());
+                            }
+                        }
+                    }
+                }
+                let _ = txn.commit();
 
-            //     let result = syscalls::ReadDirResponse {
-            //         keys: keys.drain().collect(),
-            //     }.encode_to_vec();
-            //     send_response(result)?;
-            // },
+                let result = syscalls::ReadDirResponse {
+                    keys: keys.drain().collect(),
+                }.encode_to_vec();
+
+                self.send_response(stream, result)?;
+            },
             // Some(SC::FsRead(req)) => {
             //     let result = syscalls::ReadKeyResponse {
             //         value: labeled_fs::read(req.path.as_str(), &mut self.current_label).ok(),

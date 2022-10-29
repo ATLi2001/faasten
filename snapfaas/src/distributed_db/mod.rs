@@ -4,6 +4,7 @@ use std::net::TcpStream;
 
 use crate::syscalls;
 use syscalls::syscall::Syscall as SC;
+use labeled::dclabel::DCLabel;
 
 pub mod db_server;
 // use self::db_server::DbServer;
@@ -26,42 +27,50 @@ impl From<std::io::Error> for Error {
 /// read key
 pub fn read_key(db_addr: String, key: Vec<u8>) -> Result<Vec<u8>, Error> {
     let sc = SC::ReadKey(syscalls::ReadKey {key});
-    let mut buf = Vec::new();
-    buf.reserve(sc.encoded_len());
-    sc.encode(&mut buf);
-    send_buf_get_response(db_addr, buf)
+    send_sc_get_response(db_addr, sc)
 }
 
 /// write key
 pub fn write_key(db_addr: String, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
     let sc = SC::WriteKey(syscalls::WriteKey {key, value});
+    send_sc_get_response(db_addr, sc)
+}
+
+/// read dir
+pub fn read_dir(db_addr: String, dir: Vec<u8>) -> Result<Vec<u8>, Error> {
+    let sc = SC::ReadDir(syscalls::ReadDir {dir});
+    send_sc_get_response(db_addr, sc)
+}
+
+// pub fn fs_read(db_addr: String, path: &str, cur_label: &mut DCLabel) -> Result<Vec<u8>, Error> {
+//     let sc = SC::FsRead(syscalls::FsRead {path: path.to_string, label: cur_label});
+// }
+
+/// helpers
+fn send_sc_get_response(db_addr: String, sc: SC) -> Result<Vec<u8>, Error>  {
+    use std::io::{Read, Write};
+
     let mut buf = Vec::new();
     buf.reserve(sc.encoded_len());
     sc.encode(&mut buf);
-    send_buf_get_response(db_addr, buf)
-}
-
-/// helpers
-fn send_buf_get_response(db_addr: String, buf: Vec<u8>) -> Result<Vec<u8>, Error>  {
-    use std::io::{Read, Write};
 
     match TcpStream::connect(db_addr.clone()) {
-      Ok(mut stream) => {
-          // write to server address
-          stream.write_all(&(buf.len() as u32).to_be_bytes())?;
-          stream.write_all(buf.as_ref())?;
-  
-          // read the response
-          let mut lenbuf = [0;4];
-          stream.read_exact(&mut lenbuf)?;
-          let size = u32::from_be_bytes(lenbuf);
-          let mut result = vec![0u8; size as usize];
-          stream.read_exact(&mut result)?;
-  
-          Ok(result)
-      },
-      Err(_) => {
-          Err(Error::TcpConnectionError)
-      }
-  }
+        Ok(mut stream) => {
+            // write to server address
+            stream.write_all(&(buf.len() as u32).to_be_bytes())?;
+            stream.write_all(buf.as_ref())?;
+    
+            // read the response
+            let mut lenbuf = [0;4];
+            stream.read_exact(&mut lenbuf)?;
+            let size = u32::from_be_bytes(lenbuf);
+            let mut result = vec![0u8; size as usize];
+            stream.read_exact(&mut result)?;
+    
+            Ok(result)
+        },
+        Err(_) => {
+            Err(Error::TcpConnectionError)
+        }
+    }
 }
