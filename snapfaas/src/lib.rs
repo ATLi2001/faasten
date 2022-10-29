@@ -13,6 +13,7 @@ pub mod firecracker_wrapper;
 pub mod blobstore;
 pub mod labeled_fs;
 pub mod distributed_db;
+pub mod dclabel_helper;
 
 use std::string::String;
 use std::fs::{self, File};

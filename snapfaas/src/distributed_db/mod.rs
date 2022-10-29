@@ -3,6 +3,7 @@ use std::net::TcpStream;
 // use prost::Message;
 
 use crate::syscalls;
+use crate::dclabel_helper::dc_label_to_proto_label;
 use syscalls::syscall::Syscall as SC;
 use labeled::dclabel::DCLabel;
 
@@ -14,7 +15,6 @@ pub enum Error {
     TcpConnectionError,
     TcpIOError(std::io::Error),
 }
-
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Error::TcpIOError(e)
@@ -42,9 +42,10 @@ pub fn read_dir(db_addr: String, dir: Vec<u8>) -> Result<Vec<u8>, Error> {
     send_sc_get_response(db_addr, sc)
 }
 
-// pub fn fs_read(db_addr: String, path: &str, cur_label: &mut DCLabel) -> Result<Vec<u8>, Error> {
-//     let sc = SC::FsRead(syscalls::FsRead {path: path.to_string, label: cur_label});
-// }
+pub fn fs_read(db_addr: String, path: &str, cur_label: DCLabel) -> Result<Vec<u8>, Error> {
+    let sc = SC::FsRead(syscalls::FsRead {path: path.to_string(), label: Some(dc_label_to_proto_label(&cur_label))});
+    send_sc_get_response(db_addr, sc)
+}
 
 /// helpers
 fn send_sc_get_response(db_addr: String, sc: SC) -> Result<Vec<u8>, Error>  {

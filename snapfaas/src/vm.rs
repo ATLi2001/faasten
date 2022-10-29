@@ -20,6 +20,7 @@ use crate::{blobstore, syscalls};
 use crate::request::Request;
 use crate::labeled_fs::{self, DBENV};
 use crate::distributed_db;
+use crate::dclabel_helper::{dc_label_to_proto_label, proto_label_to_dc_label};
 
 const MACPREFIX: &str = "AA:BB:CC:DD";
 const GITHUB_REST_ENDPOINT: &str = "https://api.github.com";
@@ -29,60 +30,6 @@ const USER_AGENT: &str = "snapfaas";
 
 use labeled::dclabel::{Clause, Component, DCLabel};
 use labeled::{Label, HasPrivilege};
-
-fn proto_label_to_dc_label(label: syscalls::DcLabel) -> DCLabel {
-    DCLabel {
-        secrecy: match label.secrecy {
-            None => Component::DCFalse,
-            Some(set) => Component::DCFormula(
-                set.clauses
-                    .iter()
-                    .map(|c| {
-                        Clause(c.principals.iter().map(Clone::clone).collect())
-                    })
-                    .collect(),
-            ),
-        },
-        integrity: match label.integrity {
-            None => Component::DCFalse,
-            Some(set) => Component::DCFormula(
-                set.clauses
-                    .iter()
-                    .map(|c| {
-                        Clause(c.principals.iter().map(Clone::clone).collect())
-                    })
-                    .collect(),
-            ),
-        },
-    }
-}
-
-fn dc_label_to_proto_label(label: &DCLabel) -> syscalls::DcLabel {
-    syscalls::DcLabel {
-        secrecy: match &label.secrecy {
-            Component::DCFalse => None,
-            Component::DCFormula(set) => Some(syscalls::Component {
-                clauses: set
-                    .iter()
-                    .map(|clause| syscalls::Clause {
-                        principals: clause.0.iter().map(Clone::clone).collect(),
-                    })
-                    .collect(),
-            }),
-        },
-        integrity: match &label.integrity {
-            Component::DCFalse => None,
-            Component::DCFormula(set) => Some(syscalls::Component {
-                clauses: set
-                    .iter()
-                    .map(|clause| syscalls::Clause {
-                        principals: clause.0.iter().map(Clone::clone).collect(),
-                    })
-                    .collect(),
-            }),
-        },
-    }
-}
 
 #[derive(Debug)]
 pub enum Error {

@@ -85,11 +85,13 @@ message GetCurrentLabel {
 
 message FSRead {
   string path = 1;
+  optional DcLabel label = 2;
 }
 
 message FSWrite {
   string path = 1;
   bytes data = 2;
+  optional DcLabel label = 3;
 }
 
 message FSCreateDir {
