@@ -231,8 +231,8 @@ fn main() {
     let firerunner = cmd_arguments.value_of("firerunner").unwrap().to_string();
     let allow_network = cmd_arguments.is_present("enable network");
 
-    let my_db = DbServer::new(vm_app_config.db_server_address.clone());
-    DbServer::start_dbserver(my_db);
+    let db_server = DbServer::new(vm_app_config.db_server_address.clone());
+    DbServer::start_dbserver(db_server);
 
     // Launch a vm based on the FunctionConfig value
     let t1 = Instant::now();

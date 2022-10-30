@@ -18,7 +18,7 @@ use crate::configs::FunctionConfig;
 use crate::message::Message;
 use crate::{blobstore, syscalls};
 use crate::request::Request;
-use crate::labeled_fs::{self, DBENV};
+use crate::labeled_fs;
 use crate::distributed_db;
 use crate::dclabel_helper::{dc_label_to_proto_label, proto_label_to_dc_label};
 
@@ -28,7 +28,7 @@ const GITHUB_REST_API_VERSION_HEADER: &str = "application/json+vnd";
 const GITHUB_AUTH_TOKEN: &str = "GITHUB_AUTH_TOKEN";
 const USER_AGENT: &str = "snapfaas";
 
-use labeled::dclabel::{Clause, Component, DCLabel};
+use labeled::dclabel::{Component, DCLabel};
 use labeled::{Label, HasPrivilege};
 
 #[derive(Debug)]
@@ -360,12 +360,14 @@ impl Vm {
         use syscalls::Syscall;
 
 
-        let default_db = DBENV.open_db(None);
-        if default_db.is_err() {
-            return Err(Error::DB(default_db.unwrap_err()));
-        }
+        // let default_db = DBENV.open_db(None);
+        // if default_db.is_err() {
+        //     return Err(Error::DB(default_db.unwrap_err()));
+        // }
 
-        let default_db = default_db.unwrap();
+        // let default_db = default_db.unwrap();
+
+        let mut db_client = distributed_db::db_client::DbClient::new(self.function_config.db_server_address.clone());
         loop {
             let buf = {
                 let mut lenbuf = [0;4];
@@ -385,15 +387,15 @@ impl Vm {
                     self.send_into_vm(result.encode_to_vec())?;
                 }
                 Some(SC::ReadKey(rk)) =>{
-                    let result = distributed_db::read_key(self.function_config.db_server_address.clone(), rk.key).unwrap();
+                    let result = db_client.get(rk.key).unwrap();
                     self.send_into_vm(result)?;
                 }
                 Some(SC::WriteKey(wk)) => {
-                    let result = distributed_db::write_key(self.function_config.db_server_address.clone(), wk.key, wk.value).unwrap();
+                    let result = db_client.put(wk.key, wk.value).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::ReadDir(req)) => {
-                    let result = distributed_db::read_dir(self.function_config.db_server_address.clone(), req.dir).unwrap();
+                    let result = db_client.scan(req.dir).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsRead(req)) => {
