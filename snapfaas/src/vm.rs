@@ -400,7 +400,7 @@ impl Vm {
                 },
                 Some(SC::FsRead(req)) => {
                     let result = syscalls::ReadKeyResponse {
-                        value: labeled_fs::read(req.path.as_str(), &mut self.current_label).ok(),
+                        value: labeled_fs::read(req.path.as_str(), &mut self.current_label, &mut db_client).ok(),
                     }
                     .encode_to_vec();
 
@@ -408,7 +408,7 @@ impl Vm {
                 },
                 Some(SC::FsWrite(req)) => {
                     let result = syscalls::WriteKeyResponse {
-                        success: labeled_fs::write(req.path.as_str(), req.data, &mut self.current_label).is_ok(),
+                        success: labeled_fs::write(req.path.as_str(), req.data, &mut self.current_label, &mut db_client).is_ok(),
                     }
                     .encode_to_vec();
 
@@ -418,7 +418,7 @@ impl Vm {
                     let label = proto_label_to_dc_label(req.label.expect("label"));
                     let result = syscalls::WriteKeyResponse {
                         success: labeled_fs::create_dir(
-                            req.base_dir.as_str(), req.name.as_str(), label, &mut self.current_label
+                            req.base_dir.as_str(), req.name.as_str(), label, &mut self.current_label, &mut db_client
                         ).is_ok(),
                     }
                     .encode_to_vec();
@@ -429,7 +429,7 @@ impl Vm {
                     let label = proto_label_to_dc_label(req.label.expect("label"));
                     let result = syscalls::WriteKeyResponse {
                         success: labeled_fs::create_file(
-                            req.base_dir.as_str(), req.name.as_str(), label, &mut self.current_label
+                            req.base_dir.as_str(), req.name.as_str(), label, &mut self.current_label, &mut db_client
                         ).is_ok(),
                     }
                     .encode_to_vec();
