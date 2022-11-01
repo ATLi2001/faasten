@@ -5,6 +5,8 @@ use labeled::dclabel::{self, DCLabel};
 use std::io::{Read, Write};
 
 use snapfaas::labeled_fs;
+use snapfaas::distributed_db::db_client::DbClient;
+use snapfaas::distributed_db::db_server::DbServer;
 
 fn input_to_dclabel(si_clauses: [Vec<&str>; 2]) -> DCLabel {
     let mut components = Vec::new();
@@ -45,6 +47,13 @@ fn main() {
         .about("This program is a wrapper over the labeled_fs module. \
             The main goal is to serve as a tool to create and modify files in the file system. \
             The program outputs reads to any requested path to the stdin.")
+        .arg(Arg::with_name("db server address")
+            .value_name("[ADDR:]PORT")
+            .long("db_listen")
+            .takes_value(true)
+            .required(false)
+            .default_value("127.0.0.1:7878")
+            .help("Address on which database listens"))
         .subcommand(
             SubCommand::with_name("ls")
                 .about("List the given directory")
@@ -131,17 +140,23 @@ fn main() {
         )
         .get_matches();
 
+    let db_server_address = cmd_arguments.value_of("db server address").expect("db server address").to_string();
+    let db_server = DbServer::new(db_server_address.clone());
+    DbServer::start_dbserver(db_server);
+    let mut db_client = DbClient::new(db_server_address.clone());
+
+    
     let mut cur_label = DCLabel::public();
     match cmd_arguments.subcommand() {
         ("cat", Some(sub_m)) => {
-            if let Ok(data) = labeled_fs::read(sub_m.value_of("PATH").unwrap(), &mut cur_label) {
+            if let Ok(data) = labeled_fs::read(sub_m.value_of("PATH").unwrap(), &mut cur_label, &mut db_client) {
                 std::io::stdout().write_all(&data).unwrap();
             } else {
                 eprintln!("Invalid path.");
             }
         },
         ("ls", Some(sub_m)) => {
-            if let Ok(list) = labeled_fs::list(sub_m.value_of("PATH").unwrap(), &mut cur_label) {
+            if let Ok(list) = labeled_fs::list(sub_m.value_of("PATH").unwrap(), &mut cur_label, &mut db_client) {
                 let output = list.join("\t");
                 println!("{}", output);
             } else {
@@ -157,7 +172,9 @@ fn main() {
                 path.parent().unwrap().to_str().unwrap(),
                 path.file_name().unwrap().to_str().unwrap(),
                 input_to_dclabel([s_clauses, i_clauses]),
-                &mut cur_label) {
+                &mut cur_label, 
+                &mut db_client,
+            ) {
                 Err(labeled_fs::Error::BadPath) => {
                     eprintln!("Invalid path.");
                 },
@@ -179,7 +196,9 @@ fn main() {
                 path.parent().unwrap().to_str().unwrap(),
                 path.file_name().unwrap().to_str().unwrap(),
                 input_to_dclabel([s_clauses, i_clauses]),
-                &mut cur_label) {
+                &mut cur_label,
+                &mut db_client,
+            ) {
                 Err(labeled_fs::Error::BadPath) => {
                     eprintln!("Invalid path.");
                 },
@@ -202,7 +221,7 @@ fn main() {
                 |p| std::fs::read(p).unwrap()
             );
             cur_label = input_to_endorsement(sub_m.value_of("endorse").unwrap());
-            match labeled_fs::write(sub_m.value_of("PATH").unwrap(), data, &mut cur_label) {
+            match labeled_fs::write(sub_m.value_of("PATH").unwrap(), data, &mut cur_label, &mut db_client) {
                 Err(labeled_fs::Error::BadPath) => {
                     eprintln!("Invalid path.");
                 },
