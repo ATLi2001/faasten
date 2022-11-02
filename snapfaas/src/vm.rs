@@ -19,7 +19,8 @@ use crate::message::Message;
 use crate::{blobstore, syscalls};
 use crate::request::Request;
 use crate::labeled_fs;
-use crate::distributed_db;
+use crate::distributed_db::db_client::DbClient;
+use crate::distributed_db::DbService;
 use crate::dclabel_helper::{dc_label_to_proto_label, proto_label_to_dc_label};
 
 const MACPREFIX: &str = "AA:BB:CC:DD";
@@ -367,7 +368,7 @@ impl Vm {
 
         // let default_db = default_db.unwrap();
 
-        let mut db_client = distributed_db::db_client::DbClient::new(self.function_config.db_server_address.clone());
+        let mut db_client = DbClient::new(self.function_config.db_server_address.clone());
         loop {
             let buf = {
                 let mut lenbuf = [0;4];

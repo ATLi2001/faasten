@@ -4,6 +4,7 @@ use log::debug;
 use crate::syscalls;
 use syscalls::syscall::Syscall as SC;
 use crate::request;
+use crate::distributed_db::DbService;
 
 
 #[derive(Debug)]
@@ -50,6 +51,31 @@ pub struct DbClient {
     stream: TcpStream,
 }
 
+impl DbService for DbClient {
+    /// read key
+    fn get(&mut self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let sc = SC::ReadKey(syscalls::ReadKey {key});
+        // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
+        // self.send_sc_get_response(sc, conn)
+        self.send_sc_get_response(sc)
+    }
+
+    /// write key
+    fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let sc = SC::WriteKey(syscalls::WriteKey {key, value});
+        // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
+        // self.send_sc_get_response(sc, conn)
+        self.send_sc_get_response(sc)
+    }
+    
+    fn scan(&mut self, dir: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let sc = SC::ReadDir(syscalls::ReadDir {dir});
+        // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
+        // self.send_sc_get_response(sc, conn)
+        self.send_sc_get_response(sc)
+    }
+}
+
 impl DbClient {
     pub fn new(address: String) -> Self {
         debug!("db_client created, server at {}", address.clone());
@@ -57,29 +83,6 @@ impl DbClient {
         let stream = TcpStream::connect(address.clone()).expect("tcpstream");
 
         DbClient { address: address.clone(), stream }
-    }
-
-    /// read key
-    pub fn get(&mut self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let sc = SC::ReadKey(syscalls::ReadKey {key});
-        // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
-        // self.send_sc_get_response(sc, conn)
-        self.send_sc_get_response(sc)
-    }
-    
-    /// write key
-    pub fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let sc = SC::WriteKey(syscalls::WriteKey {key, value});
-        // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
-        // self.send_sc_get_response(sc, conn)
-        self.send_sc_get_response(sc)
-    }
-
-    pub fn scan(&mut self, dir: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let sc = SC::ReadDir(syscalls::ReadDir {dir});
-        // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
-        // self.send_sc_get_response(sc, conn)
-        self.send_sc_get_response(sc)
     }
 
     /// helpers
