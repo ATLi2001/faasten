@@ -39,7 +39,6 @@ impl Directory {
     ) -> Result<u64> {
         if cur_label.can_flow_to(&label) {
             if let Some(_) = self.mappings.get(name) {
-                println!("bad path {}", name);
                 Err(Error::BadPath)
             } else {
                 let new_entry = LabeledDirEntry::new(label, entry_type, uid);
@@ -48,7 +47,6 @@ impl Directory {
                 Ok(uid)
             }
         } else {
-            println!("bad target label");
             Err(Error::BadTargetLabel)
         }
     }

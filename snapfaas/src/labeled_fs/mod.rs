@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use log::debug;
 use rand::{self, RngCore};
 use lazy_static;
 use lmdb;
@@ -37,8 +36,8 @@ lazy_static::lazy_static! {
         // returned `Result` here which if an error is an KeyExist error.
         let default_db = dbenv.open_db(None).unwrap();
         let mut txn = dbenv.begin_rw_txn().unwrap();
-        let root_uid = 0;
-        let _ = put_val_db_no_overwrite(root_uid, Directory::new().to_vec(), &mut txn, default_db);
+        let root_uid: u64 = 0;
+        let _ = txn.put(default_db, &root_uid.to_be_bytes(), &Directory::new().to_vec(), WriteFlags::NO_OVERWRITE);
         txn.commit().unwrap();
 
         dbenv
@@ -128,18 +127,24 @@ fn get_uid() -> u64 {
 }
 
 fn get_val_db(uid: u64, db_client: &mut impl DbService) -> std::result::Result<Vec<u8>, lmdb::Error> {
-    println!("get_val_db {}", uid);
     let buf = db_client.get((&uid.to_be_bytes()).to_vec()).unwrap();
     let resp = syscalls::ReadKeyResponse::decode(buf.as_ref()).expect("read key response");
     return Ok(resp.value.unwrap());
 }
 
-fn put_val_db_no_overwrite(uid: u64, val: Vec<u8>, txn: &mut lmdb::RwTransaction, db: lmdb::Database) -> std::result::Result<(), lmdb::Error> {
-    txn.put(db, &uid.to_be_bytes(), &val, WriteFlags::NO_OVERWRITE)
+fn put_val_db_no_overwrite(uid: u64, val: Vec<u8>, db_client: &mut impl DbService) -> std::result::Result<(), lmdb::Error> {
+    let buf = db_client.put((&uid.to_be_bytes()).to_vec(), val, Some(WriteFlags::NO_OVERWRITE.bits())).unwrap();
+    let resp = syscalls::WriteKeyResponse::decode(buf.as_ref()).expect("write key resposne");
+    if resp.success {
+        return Ok(());
+    }
+    else {
+        return Err(lmdb::Error::BadTxn); // temp fix; need a better way
+    }
 }
 
 fn put_val_db(uid: u64, val: Vec<u8>, db_client: &mut impl DbService) -> std::result::Result<(), lmdb::Error> {
-    let buf = db_client.put((&uid.to_be_bytes()).to_vec(), val).unwrap();
+    let buf = db_client.put((&uid.to_be_bytes()).to_vec(), val, None).unwrap();
     let resp = syscalls::WriteKeyResponse::decode(buf.as_ref()).expect("write key resposne");
     if resp.success {
         return Ok(());
@@ -156,7 +161,6 @@ fn get_direntry(path: &str, cur_label: &mut DCLabel, db_client: &mut impl DbServ
     let mut it = path.iter();
     let _ = it.next();
     for component in it {
-        println!("{}", component.to_str().unwrap());
         let entry = labeled.unlabel(cur_label);
         match entry.entry_type() {
             DirEntry::F => {
@@ -180,23 +184,16 @@ fn create_common(
     entry_type: DirEntry,
     db_client: &mut impl DbService,
 ) -> Result<()> {
-    let db = DBENV.open_db(None).unwrap();
     let res = get_direntry(base_dir, cur_label, db_client).and_then(|labeled| -> Result<()> {
         let entry = labeled.unlabel_write_check(cur_label)?;
-        println!("entry {}", entry.uid());
         match entry.entry_type() {
             DirEntry::D => {
                 let mut dir = get_val_db(entry.uid(), db_client).map(Directory::from_vec).unwrap();
-                // println!("dir {}", dir.get(name).expect("dir get").uid());
                 let mut uid = get_uid();
-                println!("{}", uid);
-                let mut txn = DBENV.begin_rw_txn().unwrap();
-                while put_val_db_no_overwrite(uid, obj_vec.clone(), &mut txn, db).is_err() {
+                while put_val_db_no_overwrite(uid, obj_vec.clone(), db_client).is_err() {
                     uid = get_uid();
                 }
                 dir.create(name, cur_label, entry_type, label, uid)?;
-                txn.commit().unwrap();
-                println!("alsdkjfalksd");
                 let _ = put_val_db(entry.uid(), dir.to_vec(), db_client);
                 Ok(())
             },
@@ -208,8 +205,6 @@ fn create_common(
 
 #[cfg(test)]
 mod tests {
-    use log::debug;
-
     use super::*;
 
     struct LocalDb {
@@ -227,12 +222,17 @@ mod tests {
             let _ = txn.commit();
             Ok(result)
         }
-        fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
+        fn put(&mut self, key: Vec<u8>, value: Vec<u8>, flags: Option<u32>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
             let db = DBENV.open_db(None).unwrap();
             let mut txn = DBENV.begin_rw_txn().unwrap();
+            let mut w_flags = WriteFlags::empty();
+            if let Some(f) = flags {
+                w_flags = WriteFlags::from_bits(f).expect("bad flags");
+            }
+
             let result = syscalls::WriteKeyResponse {
                 success: txn
-                    .put(db, &key, &value, WriteFlags::empty())
+                    .put(db, &key, &value, w_flags)
                     .is_ok(),
             }
             .encode_to_vec();
@@ -292,32 +292,32 @@ mod tests {
     fn test_storage_create_file_write_read() {
         let mut db_client = LocalDb {name: "testdb".to_string()};
 
-        // create `/func3`
+        // create `/func4`
         let mut cur_label = DCLabel::bottom();
-        let target_label = DCLabel::new([["func3"]], [["func3"]]);
-        assert!(create_dir("/", "func3", target_label, &mut cur_label, &mut db_client).is_ok());
+        let target_label = DCLabel::new([["func4"]], [["func4"]]);
+        assert!(create_dir("/", "func4", target_label, &mut cur_label, &mut db_client).is_ok());
 
-        // create `/func3/mydata.txt`
-        // after reading the directory /func3, cur_label gets raised to <func3, func3> and
-        // cannot flow to the target label <user2, func3>
-        let mut cur_label = DCLabel::new(true, [["func3"]]);
-        let target_label = DCLabel::new([["user2"]], [["func3"]]);
-        assert_eq!(create_file("/func3", "mydata.txt", target_label, &mut cur_label, &mut db_client).unwrap_err(), Error::BadTargetLabel);
-        // <func3, func3> can flow to <user2/\func3, func3>
-        let target_label = DCLabel::new([["user2"], ["func3"]], [["func3"]]);
-        assert!(create_file("/func3", "mydata.txt", target_label, &mut cur_label, &mut db_client).is_ok());
-        assert_eq!(read("/func3/mydata.txt", &mut cur_label, &mut db_client).unwrap(), Vec::<u8>::new());
+        // create `/func4/mydata.txt`
+        // after reading the directory /func4, cur_label gets raised to <func4, func4> and
+        // cannot flow to the target label <user2, func4>
+        let mut cur_label = DCLabel::new(true, [["func4"]]);
+        let target_label = DCLabel::new([["user2"]], [["func4"]]);
+        assert_eq!(create_file("/func4", "mydata.txt", target_label, &mut cur_label, &mut db_client).unwrap_err(), Error::BadTargetLabel);
+        // <func4, func4> can flow to <user2/\func4, func4>
+        let target_label = DCLabel::new([["user2"], ["func4"]], [["func4"]]);
+        assert!(create_file("/func4", "mydata.txt", target_label, &mut cur_label, &mut db_client).is_ok());
+        assert_eq!(read("/func4/mydata.txt", &mut cur_label, &mut db_client).unwrap(), Vec::<u8>::new());
     
         // write read
         let text = "test message";
         let data = text.as_bytes().to_vec();
-        assert!(write("/func3/mydata.txt", data.clone(), &mut cur_label, &mut db_client).is_ok());
-        assert_eq!(read("/func3/mydata.txt", &mut cur_label, &mut db_client).unwrap(), data);
+        assert!(write("/func4/mydata.txt", data.clone(), &mut cur_label, &mut db_client).is_ok());
+        assert_eq!(read("/func4/mydata.txt", &mut cur_label, &mut db_client).unwrap(), data);
 
         //// overwrite read
         let text = "test message test message";
         let data = text.as_bytes().to_vec();
-        assert!(write("/func3/mydata.txt", data.clone(), &mut cur_label, &mut db_client).is_ok());
-        assert_eq!(read("/func3/mydata.txt", &mut cur_label, &mut db_client).unwrap(), data);
+        assert!(write("/func4/mydata.txt", data.clone(), &mut cur_label, &mut db_client).is_ok());
+        assert_eq!(read("/func4/mydata.txt", &mut cur_label, &mut db_client).unwrap(), data);
     }
 }

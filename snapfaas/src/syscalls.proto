@@ -47,6 +47,7 @@ message ReadKeyResponse {
 message WriteKey {
   bytes key = 1;
   bytes value = 2;
+  optional uint32 flags = 3;
 }
 
 message WriteKeyResponse {
@@ -85,13 +86,11 @@ message GetCurrentLabel {
 
 message FSRead {
   string path = 1;
-  optional DcLabel label = 2;
 }
 
 message FSWrite {
   string path = 1;
   bytes data = 2;
-  optional DcLabel label = 3;
 }
 
 message FSCreateDir {

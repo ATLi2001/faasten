@@ -70,9 +70,14 @@ impl DbServer {
                 },
                 Some(SC::WriteKey(wk)) => {
                     let mut txn = DBENV.begin_rw_txn().unwrap();
+                    let mut flags = WriteFlags::empty();
+                    if let Some(f) = wk.flags {
+                        flags = WriteFlags::from_bits(f).expect("bad flags");
+                    }
+                    
                     let result = syscalls::WriteKeyResponse {
                         success: txn
-                            .put(self.db, &wk.key, &wk.value, WriteFlags::empty())
+                            .put(self.db, &wk.key, &wk.value, flags)
                             .is_ok(),
                     }
                     .encode_to_vec();

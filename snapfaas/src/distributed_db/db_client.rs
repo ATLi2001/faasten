@@ -61,8 +61,8 @@ impl DbService for DbClient {
     }
 
     /// write key
-    fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let sc = SC::WriteKey(syscalls::WriteKey {key, value});
+    fn put(&mut self, key: Vec<u8>, value: Vec<u8>, flags: Option<u32>) -> Result<Vec<u8>, Error> {
+        let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags});
         // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
         // self.send_sc_get_response(sc, conn)
         self.send_sc_get_response(sc)

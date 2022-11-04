@@ -392,7 +392,7 @@ impl Vm {
                     self.send_into_vm(result)?;
                 }
                 Some(SC::WriteKey(wk)) => {
-                    let result = db_client.put(wk.key, wk.value).unwrap();
+                    let result = db_client.put(wk.key, wk.value, None).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::ReadDir(req)) => {
