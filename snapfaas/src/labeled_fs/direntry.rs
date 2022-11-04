@@ -1,3 +1,4 @@
+use log::debug;
 use serde::{Deserialize, Serialize};
 use labeled::dclabel::DCLabel;
 use labeled::Label;
@@ -43,6 +44,7 @@ impl LabeledDirEntry {
         if cur_label.can_flow_to(&self.label) {
             Ok(&self)
         } else {
+            debug!("unauthorized");
             Err(Error::Unauthorized)
         }
     }

@@ -75,6 +75,8 @@ impl DbServer {
                         flags = WriteFlags::from_bits(f).expect("bad flags");
                     }
                     
+                    debug!("write value {}", std::str::from_utf8(wk.value.as_slice()).unwrap());
+
                     let result = syscalls::WriteKeyResponse {
                         success: txn
                             .put(self.db, &wk.key, &wk.value, flags)

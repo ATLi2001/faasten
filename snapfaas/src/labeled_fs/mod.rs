@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use log::debug;
 use rand::{self, RngCore};
 use lazy_static;
 use lmdb;
@@ -88,16 +89,19 @@ pub fn list(path: &str, cur_label: &mut DCLabel, db_client: &mut impl DbService)
 
 /// create_dir only fails when `cur_label` cannot flow to `label` or target directory's label
 pub fn create_dir(base_dir: &str, name: &str, label: DCLabel, cur_label: &mut DCLabel, db_client: &mut impl DbService) -> Result<()> {
+    debug!("create_dir at {}/{}", base_dir, name);
     create_common(base_dir, name, label, cur_label, Directory::new().to_vec(), DirEntry::D, db_client)
 }
 
 /// create_file only fails when `cur_label` cannot flow to `label` or target directory's label
 pub fn create_file(base_dir: &str, name: &str, label: DCLabel, cur_label: &mut DCLabel, db_client: &mut impl DbService) -> Result<()> {
+    debug!("create_file at {}/{}", base_dir, name);
     create_common(base_dir, name, label, cur_label, File::new().to_vec(), DirEntry::F, db_client)
 }
 
 /// write fails when `cur_label` cannot flow to the target file's label 
 pub fn write(path: &str, data: Vec<u8>, cur_label: &mut DCLabel, db_client: &mut impl DbService) -> Result<()> { 
+    debug!("write at {}", path);
     let res = get_direntry(path, cur_label,  db_client).and_then(|labeled| -> Result<()> {
         let entry = labeled.unlabel_write_check(cur_label)?;
         match entry.entry_type() {
