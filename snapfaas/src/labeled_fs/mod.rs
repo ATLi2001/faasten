@@ -59,6 +59,7 @@ type Result<T> = std::result::Result<T, Error>;
 //////////////
 /// read always succeeds by raising labels unless the target path is illegal
 pub fn read(path: &str, cur_label: &mut DCLabel, db_client: &mut impl DbService) -> Result<Vec<u8>> {
+    debug!("read {}", path);
     let res = get_direntry(path, cur_label, db_client).and_then(|labeled| -> Result<Vec<u8>> {
         let entry = labeled.unlabel(cur_label);
         match entry.entry_type() {

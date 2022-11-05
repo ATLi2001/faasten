@@ -59,6 +59,7 @@ impl DbServer {
     
             match Syscall::decode(buf.as_ref()).map_err(|e| Error::Rpc(e))?.syscall {
                 Some(SC::ReadKey(rk)) => {
+
                     let txn = DBENV.begin_ro_txn().unwrap();
                     let result = syscalls::ReadKeyResponse {
                         value: txn.get(self.db, &rk.key).ok().map(Vec::from),
@@ -75,8 +76,6 @@ impl DbServer {
                         flags = WriteFlags::from_bits(f).expect("bad flags");
                     }
                     
-                    debug!("write value {}", std::str::from_utf8(wk.value.as_slice()).unwrap());
-
                     let result = syscalls::WriteKeyResponse {
                         success: txn
                             .put(self.db, &wk.key, &wk.value, flags)

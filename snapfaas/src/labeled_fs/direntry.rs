@@ -44,7 +44,6 @@ impl LabeledDirEntry {
         if cur_label.can_flow_to(&self.label) {
             Ok(&self)
         } else {
-            debug!("unauthorized");
             Err(Error::Unauthorized)
         }
     }

@@ -143,6 +143,7 @@ fn main() {
     let db_server_address = cmd_arguments.value_of("db server address").expect("db server address").to_string();
     let db_server = DbServer::new(db_server_address.clone());
     DbServer::start_dbserver(db_server);
+    std::thread::sleep(std::time::Duration::from_secs(1));
     let mut db_client = DbClient::new(db_server_address.clone());
 
     
