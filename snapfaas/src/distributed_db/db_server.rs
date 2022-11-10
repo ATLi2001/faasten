@@ -2,7 +2,7 @@ use std::net::{TcpListener, TcpStream};
 use std::collections::HashSet;
 
 use lmdb;
-use lmdb::{Database, WriteFlags};
+use lmdb::{Database, Transaction, WriteFlags};
 
 use log::{error, debug};
 
@@ -58,7 +58,6 @@ impl DbServer {
     }
 
     fn handle_request(&self, stream: TcpStream) -> Result<(), Error> {
-        use lmdb::{Transaction, WriteFlags};
         use prost::Message;
         use std::io::Read;
         use syscalls::syscall::Syscall as SC;
