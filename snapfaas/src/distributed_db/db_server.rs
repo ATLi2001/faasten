@@ -1,12 +1,13 @@
 use std::net::{TcpListener, TcpStream};
 use std::collections::HashSet;
 
-use lmdb::Database;
+use lmdb;
+use lmdb::{Database, WriteFlags};
 
 use log::{error, debug};
 
 use crate::syscalls;
-use crate::labeled_fs::DBENV;
+use crate::labeled_fs::utils::get_new_dir_bytes;
 
 
 #[derive(Debug)]
@@ -21,18 +22,32 @@ pub enum Error {
 pub struct DbServer {
     address: String,
     db: Database,
+    dbenv: lmdb::Environment,
 }
 
 impl DbServer {
 
     pub fn new(address: String) -> Self {
-        let default_db = DBENV.open_db(None);
-        if default_db.is_err() {
-            error!("db error");
+        if !std::path::Path::new("storage").exists() {
+            let _ = std::fs::create_dir("storage").unwrap();
         }
+        
+        let dbenv = lmdb::Environment::new()
+            .set_map_size(100 * 1024 * 1024 * 1024)
+            .open(std::path::Path::new("storage"))
+            .unwrap();
 
-        let default_db = default_db.unwrap();
-        DbServer { address, db: default_db }
+        // Create the root directory object at key 0 if not already exists.
+        // uses `NO_OVERWRITE` as the write flag to make sure that it
+        // will be a noop if the root already exists at key 0. And we can safely ignore the
+        // returned `Result` here which if an error is an KeyExist error.
+        let default_db = dbenv.open_db(None).unwrap();
+        let mut txn = dbenv.begin_rw_txn().unwrap();
+        let root_uid: u64 = 0;
+        let _ = txn.put(default_db, &root_uid.to_be_bytes(), &get_new_dir_bytes(), WriteFlags::NO_OVERWRITE);
+        txn.commit().unwrap();
+
+        DbServer { address, db: default_db, dbenv }
     }
 
     fn send_response(&self, mut stream: TcpStream, response: Vec<u8>) -> Result<(), Error> {
@@ -60,7 +75,7 @@ impl DbServer {
             match Syscall::decode(buf.as_ref()).map_err(|e| Error::Rpc(e))?.syscall {
                 Some(SC::ReadKey(rk)) => {
 
-                    let txn = DBENV.begin_ro_txn().unwrap();
+                    let txn = self.dbenv.begin_ro_txn().unwrap();
                     let result = syscalls::ReadKeyResponse {
                         value: txn.get(self.db, &rk.key).ok().map(Vec::from),
                     }
@@ -70,7 +85,7 @@ impl DbServer {
                     self.send_response(stream, result)?;
                 },
                 Some(SC::WriteKey(wk)) => {
-                    let mut txn = DBENV.begin_rw_txn().unwrap();
+                    let mut txn = self.dbenv.begin_rw_txn().unwrap();
                     let mut flags = WriteFlags::empty();
                     if let Some(f) = wk.flags {
                         flags = WriteFlags::from_bits(f).expect("bad flags");
@@ -90,7 +105,7 @@ impl DbServer {
                     use lmdb::Cursor;
                     let mut keys: HashSet<Vec<u8>> = HashSet::new();
     
-                    let txn = DBENV.begin_ro_txn().unwrap();
+                    let txn = self.dbenv.begin_ro_txn().unwrap();
                     {
                         let mut dir = req.dir;
                         if !dir.ends_with(b"/") {
