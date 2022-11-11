@@ -1,5 +1,6 @@
 use std::net::{TcpListener, TcpStream};
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use lmdb;
 use lmdb::{Database, Transaction, WriteFlags};
@@ -21,8 +22,8 @@ pub enum Error {
 #[derive(Debug)]
 pub struct DbServer {
     address: String,
-    db: Database,
-    dbenv: lmdb::Environment,
+    db: Arc<Mutex<Database>>,
+    dbenv: Arc<Mutex<lmdb::Environment>>,
 }
 
 impl DbServer {
@@ -47,7 +48,11 @@ impl DbServer {
         let _ = txn.put(default_db, &root_uid.to_be_bytes(), &get_new_dir_bytes(), WriteFlags::NO_OVERWRITE);
         txn.commit().unwrap();
 
-        DbServer { address, db: default_db, dbenv }
+        DbServer { 
+            address, 
+            db: Arc::new(Mutex::new(default_db)), 
+            dbenv: Arc::new(Mutex::new(dbenv)) 
+        }
     }
 
     fn send_response(&self, mut stream: TcpStream, response: Vec<u8>) -> Result<(), Error> {
@@ -63,7 +68,10 @@ impl DbServer {
         use syscalls::syscall::Syscall as SC;
         use syscalls::Syscall;
 
+        debug!("handle request");
+
         loop {
+            debug!("handle request in loop");
             let mut stream = stream.try_clone().unwrap();
             let mut lenbuf = [0;4];
             stream.read_exact(&mut lenbuf).map_err(|e| Error::TcpRead(e))?;
@@ -74,9 +82,9 @@ impl DbServer {
             match Syscall::decode(buf.as_ref()).map_err(|e| Error::Rpc(e))?.syscall {
                 Some(SC::ReadKey(rk)) => {
 
-                    let txn = self.dbenv.begin_ro_txn().unwrap();
+                    let txn = self.dbenv.lock().unwrap().begin_ro_txn().unwrap();
                     let result = syscalls::ReadKeyResponse {
-                        value: txn.get(self.db, &rk.key).ok().map(Vec::from),
+                        value: txn.get(*self.db.lock().unwrap(), &rk.key).ok().map(Vec::from),
                     }
                     .encode_to_vec();
                     let _ = txn.commit();
@@ -84,7 +92,7 @@ impl DbServer {
                     self.send_response(stream, result)?;
                 },
                 Some(SC::WriteKey(wk)) => {
-                    let mut txn = self.dbenv.begin_rw_txn().unwrap();
+                    let mut txn = self.dbenv.lock().unwrap().begin_rw_txn().unwrap();
                     let mut flags = WriteFlags::empty();
                     if let Some(f) = wk.flags {
                         flags = WriteFlags::from_bits(f).expect("bad flags");
@@ -92,7 +100,7 @@ impl DbServer {
                     
                     let result = syscalls::WriteKeyResponse {
                         success: txn
-                            .put(self.db, &wk.key, &wk.value, flags)
+                            .put(*self.db.lock().unwrap(), &wk.key, &wk.value, flags)
                             .is_ok(),
                     }
                     .encode_to_vec();
@@ -104,13 +112,13 @@ impl DbServer {
                     use lmdb::Cursor;
                     let mut keys: HashSet<Vec<u8>> = HashSet::new();
     
-                    let txn = self.dbenv.begin_ro_txn().unwrap();
+                    let txn = self.dbenv.lock().unwrap().begin_ro_txn().unwrap();
                     {
                         let mut dir = req.dir;
                         if !dir.ends_with(b"/") {
                             dir.push(b'/');
                         }
-                        let mut cursor = txn.open_ro_cursor(self.db).or(Err(Error::RootfsNotExist))?.iter_from(&dir);
+                        let mut cursor = txn.open_ro_cursor(*self.db.lock().unwrap()).or(Err(Error::RootfsNotExist))?.iter_from(&dir);
                         while let Some(Ok((key, _))) = cursor.next() {
                             if !key.starts_with(&dir) {
                                 break
@@ -131,10 +139,10 @@ impl DbServer {
                     self.send_response(stream, result)?;
                 },
                 Some(SC::CompareAndSwap(cas)) => {
-                    let mut txn = self.dbenv.begin_rw_txn().unwrap();
-                    let old = txn.get(self.db, &cas.key).ok().map(Into::into);
+                    let mut txn = self.dbenv.lock().unwrap().begin_rw_txn().unwrap();
+                    let old = txn.get(*self.db.lock().unwrap(), &cas.key).ok().map(Into::into);
                     let res = if cas.expected == old {
-                        let _ = txn.put(self.db, &cas.key, &cas.value, WriteFlags::empty());
+                        let _ = txn.put(*self.db.lock().unwrap(), &cas.key, &cas.value, WriteFlags::empty());
                         Ok(())
                     } else {
                         Err(old)
@@ -143,6 +151,13 @@ impl DbServer {
 
                     let result = syscalls::WriteKeyResponse {
                         success: res.is_ok()
+                    }.encode_to_vec();
+
+                    self.send_response(stream, result)?;
+                },
+                Some(SC::Invoke(invoke)) => {
+                    let result = syscalls::InvokeResponse {
+                        success: invoke.function.eq("ping")
                     }.encode_to_vec();
 
                     self.send_response(stream, result)?;
@@ -166,11 +181,23 @@ impl DbServer {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
-                    debug!("New connection: {}", stream.peer_addr().unwrap());
-                    if let Err(_e) = self.handle_request(stream){
-                        return; // TODO: not ideal
-                        // error!("handle request error: {:?}", e);
-                    }
+                    std::thread::spawn(move || {
+                        debug!("New connection: {}", stream.peer_addr().unwrap());
+                        match stream.read_timeout().unwrap() {
+                            None => {
+                                debug!("read timeout None");
+                            },
+                            Some(d) => {
+                                debug!("read timeout {} ms", d.as_millis());
+                            }
+                        }
+                        if let Err(_e) = self.handle_request(stream){
+                            debug!("handle request returned error");
+                            return; // TODO: not ideal
+                            // error!("handle request error: {:?}", e);
+                        }
+                        debug!("done handling request");
+                    });
                 }
                 Err(e) => {
                     error!("stream error: {:?}", e);
