@@ -1,5 +1,6 @@
 use std::net::TcpStream;
 use log::debug;
+use lmdb::WriteFlags;
 
 use crate::syscalls;
 use syscalls::syscall::Syscall as SC;
@@ -52,7 +53,6 @@ pub struct DbClient {
 }
 
 impl DbService for DbClient {
-    /// read key
     fn get(&mut self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
         let sc = SC::ReadKey(syscalls::ReadKey {key});
         // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
@@ -60,11 +60,22 @@ impl DbService for DbClient {
         self.send_sc_get_response(sc)
     }
 
-    /// write key
-    fn put(&mut self, key: Vec<u8>, value: Vec<u8>, flags: Option<u32>) -> Result<Vec<u8>, Error> {
-        let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags});
+    fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags: None});
         // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
         // self.send_sc_get_response(sc, conn)
+        self.send_sc_get_response(sc)
+    }
+
+    fn add(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags: Some(WriteFlags::NO_OVERWRITE.bits())});
+        // let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
+        // self.send_sc_get_response(sc, conn)
+        self.send_sc_get_response(sc)
+    }
+
+    fn cas(&mut self, key: Vec<u8>, expected: Option<Vec<u8>>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let sc = SC::CompareAndSwap(syscalls::CompareAndSwap {key, expected, value});
         self.send_sc_get_response(sc)
     }
     

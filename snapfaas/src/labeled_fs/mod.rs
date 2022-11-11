@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use log::debug;
+use log::{error, debug};
 use rand::{self, RngCore};
 use lazy_static;
 use lmdb;
@@ -138,7 +138,7 @@ fn get_val_db(uid: u64, db_client: &mut impl DbService) -> std::result::Result<V
 }
 
 fn put_val_db_no_overwrite(uid: u64, val: Vec<u8>, db_client: &mut impl DbService) -> std::result::Result<(), lmdb::Error> {
-    let buf = db_client.put((&uid.to_be_bytes()).to_vec(), val, Some(WriteFlags::NO_OVERWRITE.bits())).unwrap();
+    let buf = db_client.add((&uid.to_be_bytes()).to_vec(), val).unwrap();
     let resp = syscalls::WriteKeyResponse::decode(buf.as_ref()).expect("write key resposne");
     if resp.success {
         return Ok(());
@@ -149,7 +149,18 @@ fn put_val_db_no_overwrite(uid: u64, val: Vec<u8>, db_client: &mut impl DbServic
 }
 
 fn put_val_db(uid: u64, val: Vec<u8>, db_client: &mut impl DbService) -> std::result::Result<(), lmdb::Error> {
-    let buf = db_client.put((&uid.to_be_bytes()).to_vec(), val, None).unwrap();
+    let buf = db_client.put((&uid.to_be_bytes()).to_vec(), val).unwrap();
+    let resp = syscalls::WriteKeyResponse::decode(buf.as_ref()).expect("write key resposne");
+    if resp.success {
+        return Ok(());
+    }
+    else {
+        return Err(lmdb::Error::BadTxn); // temp fix; need a better way
+    }
+}
+
+fn cas_db(uid: u64, expected: Option<Vec<u8>>, val: Vec<u8>, db_client: &mut impl DbService) -> std::result::Result<(), lmdb::Error> {
+    let buf = db_client.cas((&uid.to_be_bytes()).to_vec(), expected, val).unwrap();
     let resp = syscalls::WriteKeyResponse::decode(buf.as_ref()).expect("write key resposne");
     if resp.success {
         return Ok(());
@@ -194,12 +205,16 @@ fn create_common(
         match entry.entry_type() {
             DirEntry::D => {
                 let mut dir = get_val_db(entry.uid(), db_client).map(Directory::from_vec).unwrap();
+                let old_dir_val = dir.to_vec();
                 let mut uid = get_uid();
                 while put_val_db_no_overwrite(uid, obj_vec.clone(), db_client).is_err() {
                     uid = get_uid();
                 }
                 dir.create(name, cur_label, entry_type, label, uid)?;
-                let _ = put_val_db(entry.uid(), dir.to_vec(), db_client);
+                let cas_res = cas_db(entry.uid(), Some(old_dir_val), dir.to_vec(), db_client);
+                if cas_res.is_err() {
+                    error!("cas failed");
+                }
                 Ok(())
             },
             DirEntry::F => Err(Error::BadPath),
@@ -227,21 +242,48 @@ mod tests {
             let _ = txn.commit();
             Ok(result)
         }
-        fn put(&mut self, key: Vec<u8>, value: Vec<u8>, flags: Option<u32>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
+        fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
             let db = DBENV.open_db(None).unwrap();
             let mut txn = DBENV.begin_rw_txn().unwrap();
-            let mut w_flags = WriteFlags::empty();
-            if let Some(f) = flags {
-                w_flags = WriteFlags::from_bits(f).expect("bad flags");
-            }
 
             let result = syscalls::WriteKeyResponse {
                 success: txn
-                    .put(db, &key, &value, w_flags)
+                    .put(db, &key, &value, WriteFlags::empty())
                     .is_ok(),
             }
             .encode_to_vec();
             let _ = txn.commit();
+            Ok(result)
+        }
+        fn add(&mut self, key: Vec<u8>, value: Vec<u8>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
+            let db = DBENV.open_db(None).unwrap();
+            let mut txn = DBENV.begin_rw_txn().unwrap();
+
+            let result = syscalls::WriteKeyResponse {
+                success: txn
+                    .put(db, &key, &value, WriteFlags::NO_OVERWRITE)
+                    .is_ok(),
+            }
+            .encode_to_vec();
+            let _ = txn.commit();
+            Ok(result)
+        }
+        fn cas(&mut self, key: Vec<u8>, expected: Option<Vec<u8>>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
+            let db = DBENV.open_db(None).unwrap();
+            let mut txn = DBENV.begin_rw_txn().unwrap();
+            let old = txn.get(db, &key).ok().map(Into::into);
+            let res = if expected.map(|e| Vec::from(e)) == old {
+                let _ = txn.put(db, &key, &value, WriteFlags::empty());
+                Ok(())
+            } else {
+                Err(old)
+            };
+            txn.commit().unwrap();
+
+            let result = syscalls::WriteKeyResponse {
+                success: res.is_ok(),
+            }
+            .encode_to_vec();
             Ok(result)
         }
         fn scan(&mut self, dir: Vec<u8>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {

@@ -392,11 +392,15 @@ impl Vm {
                     self.send_into_vm(result)?;
                 }
                 Some(SC::WriteKey(wk)) => {
-                    let result = db_client.put(wk.key, wk.value, None).unwrap();
+                    let result = db_client.put(wk.key, wk.value).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::ReadDir(req)) => {
                     let result = db_client.scan(req.dir).unwrap();
+                    self.send_into_vm(result)?;
+                },
+                Some(SC::CompareAndSwap(cas)) => {
+                    let result = db_client.cas(cas.key, cas.expected, cas.value).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsRead(req)) => {

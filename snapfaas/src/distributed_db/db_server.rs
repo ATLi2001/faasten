@@ -130,6 +130,23 @@ impl DbServer {
     
                     self.send_response(stream, result)?;
                 },
+                Some(SC::CompareAndSwap(cas)) => {
+                    let mut txn = self.dbenv.begin_rw_txn().unwrap();
+                    let old = txn.get(self.db, &cas.key).ok().map(Into::into);
+                    let res = if cas.expected == old {
+                        let _ = txn.put(self.db, &cas.key, &cas.value, WriteFlags::empty());
+                        Ok(())
+                    } else {
+                        Err(old)
+                    };
+                    txn.commit().unwrap();
+
+                    let result = syscalls::WriteKeyResponse {
+                        success: res.is_ok()
+                    }.encode_to_vec();
+
+                    self.send_response(stream, result)?;
+                },
                 Some(_) => {
                     // should never happen
                     error!("received unexpected syscall");

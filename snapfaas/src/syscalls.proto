@@ -54,6 +54,12 @@ message WriteKeyResponse {
   bool success = 1;
 }
 
+message CompareAndSwap {
+  bytes key = 1;
+  optional bytes expected = 2;
+  bytes value = 3;
+}
+
 message ReadDir {
   bytes dir = 1;
 }
@@ -164,5 +170,6 @@ message Syscall {
     BlobRead readBlob = 17;
     BlobClose closeBlob = 18;
     ReadDir readDir = 19;
+    CompareAndSwap compareAndSwap = 20;
   }
 }
