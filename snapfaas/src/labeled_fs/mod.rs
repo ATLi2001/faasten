@@ -226,13 +226,14 @@ fn create_common(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::distributed_db::Error;
 
     struct LocalDb {
         pub name: String,
     }
 
     impl DbService for LocalDb {
-        fn get(&mut self, key: Vec<u8>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
+        fn get(&mut self, key: Vec<u8>) -> std::result::Result<Vec<u8>, Error> {
             let db = DBENV.open_db(None).unwrap();
             let txn = DBENV.begin_ro_txn().unwrap();
             let result = syscalls::ReadKeyResponse {
@@ -242,7 +243,7 @@ mod tests {
             let _ = txn.commit();
             Ok(result)
         }
-        fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
+        fn put(&mut self, key: Vec<u8>, value: Vec<u8>) -> std::result::Result<Vec<u8>, Error> {
             let db = DBENV.open_db(None).unwrap();
             let mut txn = DBENV.begin_rw_txn().unwrap();
 
@@ -255,7 +256,7 @@ mod tests {
             let _ = txn.commit();
             Ok(result)
         }
-        fn add(&mut self, key: Vec<u8>, value: Vec<u8>) -> std::result::Result<Vec<u8>, crate::distributed_db::db_client::Error> {
+        fn add(&mut self, key: Vec<u8>, value: Vec<u8>) -> std::result::Result<Vec<u8>, Error> {
             let db = DBENV.open_db(None).unwrap();
             let mut txn = DBENV.begin_rw_txn().unwrap();
 
