@@ -7,6 +7,7 @@ use std::io::{Read, Write};
 use snapfaas::labeled_fs;
 use snapfaas::distributed_db::db_client::DbClient;
 use snapfaas::distributed_db::db_server::DbServer;
+use snapfaas::fs;
 
 fn input_to_dclabel(si_clauses: [Vec<&str>; 2]) -> DCLabel {
     let mut components = Vec::new();
