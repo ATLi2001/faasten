@@ -14,7 +14,6 @@ pub mod blobstore;
 pub mod labeled_fs;
 pub mod fs;
 pub mod distributed_db;
-pub mod dclabel_helper;
 
 use std::string::String;
 use std::io::{BufReader, BufRead, Error, ErrorKind, Result};

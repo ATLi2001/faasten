@@ -5,7 +5,10 @@ use lmdb::WriteFlags;
 use crate::syscalls;
 use syscalls::syscall::Syscall as SC;
 use crate::distributed_db::{DbService, Error};
+use crate::fs::BackingStore;
+use prost::Message;
 
+#[derive(Debug)]
 struct DbServerManager {
     address: String,
 }
@@ -36,6 +39,7 @@ impl r2d2::ManageConnection for DbServerManager {
     }
 }
 
+#[derive(Debug)]
 pub struct DbClient {
     address: String,
     conn: r2d2::Pool<DbServerManager>,
@@ -72,6 +76,67 @@ impl DbService for DbClient {
         let sc = SC::ReadDir(syscalls::ReadDir {dir});
         let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
         send_sc_get_response(sc, conn)
+    }
+}
+
+impl BackingStore for &DbClient {
+    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        let sc = SC::ReadKey(syscalls::ReadKey {key: Vec::from(key)});
+        let conn = &mut self.conn.get().unwrap();
+        let resp = send_sc_get_response(sc, conn);
+        if resp.is_err() {
+            None
+        }
+        else {
+            syscalls::ReadKeyResponse::decode(resp.unwrap().as_ref()).unwrap().value
+        }
+    }
+
+    fn put(&self, key: &[u8], value: &[u8]) {
+        let sc = SC::WriteKey(syscalls::WriteKey {
+            key: Vec::from(key), 
+            value: Vec::from(value),
+            flags: None,
+        });
+        let conn = &mut self.conn.get().unwrap();
+        send_sc_get_response(sc, conn);
+    }
+
+    fn add(&self, key: &[u8], value: &[u8]) -> bool {
+        let sc = SC::WriteKey(syscalls::WriteKey {
+            key: Vec::from(key), 
+            value: Vec::from(value),
+            flags: Some(WriteFlags::NO_OVERWRITE.bits()),
+        });
+        let conn = &mut self.conn.get().unwrap();
+        let resp = send_sc_get_response(sc, conn);
+        if resp.is_err() {
+            false
+        }
+        else {
+            syscalls::WriteKeyResponse::decode(resp.unwrap().as_ref()).unwrap().success
+        }
+    }
+
+    fn cas(&self, key: &[u8], expected: Option<&[u8]>, value: &[u8]) -> Result<(), Option<Vec<u8>>> {
+        let mut exp = None; 
+        if expected.is_some() {
+            exp = Some(Vec::from(expected.unwrap()));
+        }
+        let sc = SC::CompareAndSwap(syscalls::CompareAndSwap {
+            key: Vec::from(key), 
+            expected: exp, 
+            value: Vec::from(value),
+        });
+        let conn = &mut self.conn.get().unwrap();
+        let resp = send_sc_get_response(sc, conn);
+        let cas_res = syscalls::CompareAndSwapResponse::decode(resp.unwrap().as_ref()).unwrap();
+        if cas_res.success {
+            Ok(())
+        }
+        else {
+            Err(cas_res.old)
+        }
     }
 }
 

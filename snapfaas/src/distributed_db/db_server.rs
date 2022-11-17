@@ -1,5 +1,5 @@
 use std::net::{TcpListener, TcpStream};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::sync::{Arc, Mutex};
 
 use lmdb;
@@ -8,7 +8,7 @@ use lmdb::{Database, Transaction, WriteFlags};
 use log::{error, debug};
 
 use crate::syscalls;
-use crate::labeled_fs::utils::get_new_dir_bytes;
+use crate::fs::DirEntry;
 
 
 #[derive(Debug)]
@@ -45,7 +45,8 @@ impl DbServer {
         let default_db = dbenv.open_db(None).unwrap();
         let mut txn = dbenv.begin_rw_txn().unwrap();
         let root_uid: u64 = 0;
-        let _ = txn.put(default_db, &root_uid.to_be_bytes(), &get_new_dir_bytes(), WriteFlags::NO_OVERWRITE);
+        let dir_contents = serde_json::ser::to_vec(&HashMap::<String, DirEntry>::new()).unwrap_or((&b"{}"[..]).into());
+        let _ = txn.put(default_db, &root_uid.to_be_bytes(), &dir_contents, WriteFlags::NO_OVERWRITE);
         txn.commit().unwrap();
 
         DbServer { 
@@ -145,12 +146,13 @@ impl DbServer {
                         let _ = txn.put(*self.db.lock().unwrap(), &cas.key, &cas.value, WriteFlags::empty());
                         Ok(())
                     } else {
-                        Err(old)
+                        Err(old.clone())
                     };
                     txn.commit().unwrap();
 
-                    let result = syscalls::WriteKeyResponse {
-                        success: res.is_ok()
+                    let result = syscalls::CompareAndSwapResponse {
+                        success: res.is_ok(),
+                        old,
                     }.encode_to_vec();
 
                     self.send_response(stream, result)?;

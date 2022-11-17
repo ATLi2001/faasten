@@ -8,7 +8,7 @@ use std::string::String;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc;
 use std::io::{Seek, Write};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use log::{debug, error};
 use tokio::process::{Child, Command};
@@ -20,6 +20,7 @@ use crate::{blobstore, syscalls};
 use crate::request::Request;
 use crate::labeled_fs::DBENV;
 use crate::fs;
+use crate::distributed_db::db_client::DbClient;
 
 const MACPREFIX: &str = "AA:BB:CC:DD";
 const GITHUB_REST_ENDPOINT: &str = "https://api.github.com";
@@ -27,8 +28,62 @@ const GITHUB_REST_API_VERSION_HEADER: &str = "application/json+vnd";
 const GITHUB_AUTH_TOKEN: &str = "GITHUB_AUTH_TOKEN";
 const USER_AGENT: &str = "snapfaas";
 
-use labeled::dclabel::{Component, DCLabel};
+use labeled::dclabel::{Clause, Component, DCLabel};
 use labeled::{Label, HasPrivilege};
+
+fn proto_label_to_dc_label(label: syscalls::DcLabel) -> DCLabel {
+    DCLabel {
+        secrecy: match label.secrecy {
+            None => Component::DCFalse,
+            Some(set) => Component::DCFormula(
+                set.clauses
+                    .iter()
+                    .map(|c| {
+                        Clause(c.principals.iter().map(Clone::clone).collect())
+                    })
+                    .collect(),
+            ),
+        },
+        integrity: match label.integrity {
+            None => Component::DCFalse,
+            Some(set) => Component::DCFormula(
+                set.clauses
+                    .iter()
+                    .map(|c| {
+                        Clause(c.principals.iter().map(Clone::clone).collect())
+                    })
+                    .collect(),
+            ),
+        },
+    }
+}
+
+fn dc_label_to_proto_label(label: &DCLabel) -> syscalls::DcLabel {
+    syscalls::DcLabel {
+        secrecy: match &label.secrecy {
+            Component::DCFalse => None,
+            Component::DCFormula(set) => Some(syscalls::Component {
+                clauses: set
+                    .iter()
+                    .map(|clause| syscalls::Clause {
+                        principals: clause.0.iter().map(Clone::clone).collect(),
+                    })
+                    .collect(),
+            }),
+        },
+        integrity: match &label.integrity {
+            Component::DCFalse => None,
+            Component::DCFormula(set) => Some(syscalls::Component {
+                clauses: set
+                    .iter()
+                    .map(|clause| syscalls::Clause {
+                        principals: clause.0.iter().map(Clone::clone).collect(),
+                    })
+                    .collect(),
+            }),
+        },
+    }
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -89,7 +144,8 @@ pub struct Vm {
     create_blobs: HashMap<u64, blobstore::NewBlob>,
     blobs: HashMap<u64, blobstore::Blob>,
     max_blob_id: u64,
-    fs: fs::FS<&'static lmdb::Environment>,
+    fs: fs::FS<&'static DbClient>,
+    db_client: &'static DbClient,
 }
 
 impl Vm {
@@ -100,8 +156,9 @@ impl Vm {
         function_name: String,
         function_config: FunctionConfig,
         allow_network: bool,
-        fs: fs::FS<&'static lmdb::Environment>,
     ) -> Self {
+        let address = function_config.db_server_address.clone();
+        let db_client = &DbClient::new(address);
         Vm {
             id,
             allow_network,
@@ -118,7 +175,8 @@ impl Vm {
             create_blobs: Default::default(),
             blobs: Default::default(),
             max_blob_id: 0,
-            fs,
+            fs: fs::FS::new(db_client),
+            db_client,
         }
     }
 
@@ -356,10 +414,12 @@ impl Vm {
     }
 
     fn process_syscalls(&mut self) -> Result<String, Error> {
+        use lmdb::{Transaction, WriteFlags};
         use prost::Message;
         use std::io::Read;
         use syscalls::syscall::Syscall as SC;
         use syscalls::Syscall;
+        use crate::distributed_db::DbService;
 
 
         // let default_db = DBENV.open_db(None);
@@ -369,7 +429,7 @@ impl Vm {
 
         // let default_db = default_db.unwrap();
 
-        let mut db_client = DbClient::new(self.function_config.db_server_address.clone());
+        let db_client = DbClient::new(self.function_config.db_server_address.clone());
         loop {
             let buf = {
                 let mut lenbuf = [0;4];
