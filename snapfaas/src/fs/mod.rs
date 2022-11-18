@@ -167,9 +167,11 @@ impl<S: BackingStore> FS<S> {
     pub fn link(&self, dir: &Directory, name: String, direntry: DirEntry) -> Result<String, LinkError>{
         CURRENT_LABEL.with(|current_label| {
             if !current_label.borrow().secrecy.implies(&dir.label.secrecy) {
+                debug!("cannot read");
                 return Err(LinkError::LabelError(LabelError::CannotRead));
             }
             if !current_label.borrow().can_flow_to(&dir.label) {
+                debug!("cannot write");
                 return Err(LinkError::LabelError(LabelError::CannotWrite));
             }
             let mut raw_dir: Option<Vec<u8>> = self.storage.get(&dir.object_id.to_be_bytes());
@@ -271,6 +273,10 @@ pub mod utils {
 
     pub fn read_path<S: Clone + BackingStore>(fs: &FS<S>, path: Vec<String>) -> Result<DirEntry, Error> {
         debug!("path vec {:?}", path);
+        if path.is_empty() {
+            return Ok(fs.root().into());
+        }
+
         if let Some((last, path)) = path.split_last() {
             debug!("last: {:?}, path: {:?}", last, path);
             let direntry = path.iter().try_fold(fs.root().into(), |de, comp| -> Result<DirEntry, Error> {
@@ -296,6 +302,7 @@ pub mod utils {
                 super::DirEntry::File(_) => Err(Error::BadPath)
             }
         } else {
+            debug!("bad path");
             Err(Error::BadPath)
         }
     }

@@ -491,7 +491,7 @@ impl Vm {
                 Some(SC::FsCreateDir(req)) => {
                     debug!("req base_dir {:?}", req.base_dir);
                     let label = proto_label_to_dc_label(req.label.clone().expect("label"));
-                    let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").map(String::from).collect()).ok().and_then(|entry| {
+                    let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
                         match entry {
                             fs::DirEntry::Directory(dir) => {
                                 let newdir = self.fs.create_directory(label);
