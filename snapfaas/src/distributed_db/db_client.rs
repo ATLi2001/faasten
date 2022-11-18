@@ -39,7 +39,7 @@ impl r2d2::ManageConnection for DbServerManager {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DbClient {
     address: String,
     conn: r2d2::Pool<DbServerManager>,
@@ -47,14 +47,12 @@ pub struct DbClient {
 
 impl DbService for DbClient {
     fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
-        debug!("get called");
         let sc = SC::ReadKey(syscalls::ReadKey {key});
         let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
         send_sc_get_response(sc, conn)
     }
 
     fn put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
-        debug!("put called");
         let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags: None});
         let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
         send_sc_get_response(sc, conn)
@@ -79,12 +77,14 @@ impl DbService for DbClient {
     }
 }
 
-impl BackingStore for &DbClient {
+impl BackingStore for DbClient {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+        debug!("get called");
         let sc = SC::ReadKey(syscalls::ReadKey {key: Vec::from(key)});
         let conn = &mut self.conn.get().unwrap();
         let resp = send_sc_get_response(sc, conn);
         if resp.is_err() {
+            debug!("get resp error");
             None
         }
         else {
@@ -93,6 +93,7 @@ impl BackingStore for &DbClient {
     }
 
     fn put(&self, key: &[u8], value: &[u8]) {
+        debug!("put called");
         let sc = SC::WriteKey(syscalls::WriteKey {
             key: Vec::from(key), 
             value: Vec::from(value),
@@ -103,6 +104,7 @@ impl BackingStore for &DbClient {
     }
 
     fn add(&self, key: &[u8], value: &[u8]) -> bool {
+        debug!("add called");
         let sc = SC::WriteKey(syscalls::WriteKey {
             key: Vec::from(key), 
             value: Vec::from(value),
@@ -119,6 +121,7 @@ impl BackingStore for &DbClient {
     }
 
     fn cas(&self, key: &[u8], expected: Option<&[u8]>, value: &[u8]) -> Result<(), Option<Vec<u8>>> {
+        debug!("cas called");
         let mut exp = None; 
         if expected.is_some() {
             exp = Some(Vec::from(expected.unwrap()));

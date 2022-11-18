@@ -2,6 +2,7 @@
 
 
 use lmdb::{Transaction, WriteFlags};
+use log::debug;
 use serde::{Serialize, Deserialize};
 use std::{collections::HashMap, cell::RefCell};
 use labeled::{dclabel::DCLabel, Label};
@@ -148,10 +149,16 @@ impl<S: BackingStore> FS<S> {
         CURRENT_LABEL.with(|current_label| {
             if dir.label.can_flow_to(&*current_label.borrow()) {
                 Ok(match self.storage.get(&dir.object_id.to_be_bytes()) {
-                    Some(bs) => serde_json::from_slice(bs.as_slice()).unwrap_or_default(),
-                    None => Default::default()
+                    Some(bs) => {
+                        serde_json::from_slice(bs.as_slice()).unwrap_or_default()
+                    },
+                    None => {
+                        debug!("list default");
+                        Default::default()
+                    }
                 })
             } else {
+                debug!("list cannot read");
                 Err(LabelError::CannotRead)
             }
         })
@@ -263,17 +270,27 @@ pub mod utils {
     }
 
     pub fn read_path<S: Clone + BackingStore>(fs: &FS<S>, path: Vec<String>) -> Result<DirEntry, Error> {
+        debug!("path vec {:?}", path);
         if let Some((last, path)) = path.split_last() {
+            debug!("last: {:?}, path: {:?}", last, path);
             let direntry = path.iter().try_fold(fs.root().into(), |de, comp| -> Result<DirEntry, Error> {
                 match de {
                     super::DirEntry::Directory(dir) => {
-                        fs.list(dir)?.get(comp).map(Clone::clone).ok_or(Error::BadPath)
+                        debug!("dir {:?}", dir.object_id);
+                        debug!("comp {:?}", comp);
+                        let tmp = fs.list(dir)?;
+                        debug!("list returns {:?}", tmp.keys());
+                        let tmp2 = tmp.get(comp).map(Clone::clone);
+                        debug!("comp in fs list(dir): {:?}", tmp2.is_some());
+                        tmp.get(comp).map(Clone::clone).ok_or(Error::BadPath)
                     },
                     super::DirEntry::File(_) => Err(Error::BadPath)
                 }
             })?;
             match direntry {
                 super::DirEntry::Directory(dir) => {
+                    debug!("dir {:?}", dir.object_id);
+                    debug!("last {:?}", last);
                     fs.list(dir)?.get(last).map(Clone::clone).ok_or(Error::BadPath)
                 },
                 super::DirEntry::File(_) => Err(Error::BadPath)

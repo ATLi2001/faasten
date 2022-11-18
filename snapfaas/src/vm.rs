@@ -8,7 +8,7 @@ use std::string::String;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc;
 use std::io::{Seek, Write};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use log::{debug, error};
 use tokio::process::{Child, Command};
@@ -18,7 +18,7 @@ use crate::configs::FunctionConfig;
 use crate::message::Message;
 use crate::{blobstore, syscalls};
 use crate::request::Request;
-use crate::labeled_fs::DBENV;
+// use crate::labeled_fs::DBENV;
 use crate::fs;
 use crate::distributed_db::db_client::DbClient;
 
@@ -144,8 +144,7 @@ pub struct Vm {
     create_blobs: HashMap<u64, blobstore::NewBlob>,
     blobs: HashMap<u64, blobstore::Blob>,
     max_blob_id: u64,
-    fs: fs::FS<&'static DbClient>,
-    db_client: &'static DbClient,
+    fs: fs::FS<DbClient>,
 }
 
 impl Vm {
@@ -158,7 +157,7 @@ impl Vm {
         allow_network: bool,
     ) -> Self {
         let address = function_config.db_server_address.clone();
-        let db_client = &DbClient::new(address);
+        let db_client = DbClient::new(address);
         Vm {
             id,
             allow_network,
@@ -176,7 +175,6 @@ impl Vm {
             blobs: Default::default(),
             max_blob_id: 0,
             fs: fs::FS::new(db_client),
-            db_client,
         }
     }
 
@@ -414,7 +412,6 @@ impl Vm {
     }
 
     fn process_syscalls(&mut self) -> Result<String, Error> {
-        use lmdb::{Transaction, WriteFlags};
         use prost::Message;
         use std::io::Read;
         use syscalls::syscall::Syscall as SC;
@@ -492,16 +489,19 @@ impl Vm {
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsCreateDir(req)) => {
+                    debug!("req base_dir {:?}", req.base_dir);
                     let label = proto_label_to_dc_label(req.label.clone().expect("label"));
                     let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").map(String::from).collect()).ok().and_then(|entry| {
                         match entry {
                             fs::DirEntry::Directory(dir) => {
                                 let newdir = self.fs.create_directory(label);
+                                debug!("create_directory");
                                 self.fs.link(&dir, req.name, fs::DirEntry::Directory(newdir)).ok()
                             },
                             fs::DirEntry::File(_) => None,
                         }
                     });
+                    debug!("value {:?}", value);
                     let result = syscalls::WriteKeyResponse {
                         success: value.is_some()
                     }
