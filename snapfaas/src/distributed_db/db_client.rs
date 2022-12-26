@@ -41,10 +41,11 @@ impl r2d2::ManageConnection for DbServerManager {
 
 #[derive(Debug, Clone)]
 pub struct DbClient {
-    address: String,
+    // address: String,
     conn: r2d2::Pool<DbServerManager>,
 }
 
+// legacy for read key, write key, read dir, cas basic operations
 impl DbService for DbClient {
     fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
         let sc = SC::ReadKey(syscalls::ReadKey {key});
@@ -79,12 +80,10 @@ impl DbService for DbClient {
 
 impl BackingStore for DbClient {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        debug!("get called");
         let sc = SC::ReadKey(syscalls::ReadKey {key: Vec::from(key)});
         let conn = &mut self.conn.get().unwrap();
         let resp = send_sc_get_response(sc, conn);
         if resp.is_err() {
-            debug!("get resp error");
             None
         }
         else {
@@ -93,18 +92,16 @@ impl BackingStore for DbClient {
     }
 
     fn put(&self, key: &[u8], value: &[u8]) {
-        debug!("put called");
         let sc = SC::WriteKey(syscalls::WriteKey {
             key: Vec::from(key), 
             value: Vec::from(value),
             flags: None,
         });
         let conn = &mut self.conn.get().unwrap();
-        send_sc_get_response(sc, conn);
+        let _ = send_sc_get_response(sc, conn);
     }
 
     fn add(&self, key: &[u8], value: &[u8]) -> bool {
-        debug!("add called");
         let sc = SC::WriteKey(syscalls::WriteKey {
             key: Vec::from(key), 
             value: Vec::from(value),
@@ -121,7 +118,6 @@ impl BackingStore for DbClient {
     }
 
     fn cas(&self, key: &[u8], expected: Option<&[u8]>, value: &[u8]) -> Result<(), Option<Vec<u8>>> {
-        debug!("cas called");
         let mut exp = None; 
         if expected.is_some() {
             exp = Some(Vec::from(expected.unwrap()));
@@ -148,7 +144,7 @@ impl DbClient {
         debug!("db_client created, server at {}", address.clone());
         let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
 
-        DbClient { address: address.clone(), conn }
+        DbClient {conn}
     }
 }
 

@@ -462,7 +462,7 @@ impl Vm {
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsRead(req)) => {
-                    let value = fs::utils::read_path(&self.fs, req.path.split("/").map(String::from).collect()).ok().and_then(|entry| {
+                    let value = fs::utils::read_path(&self.fs, req.path.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
                         match entry {
                             fs::DirEntry::Directory(_) => None,
                             fs::DirEntry::File(file) => self.fs.read(&file).ok()
@@ -475,7 +475,7 @@ impl Vm {
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsWrite(req)) => {
-                    let value = fs::utils::read_path(&self.fs, req.path.split("/").map(String::from).collect()).ok().and_then(|entry| {
+                    let value = fs::utils::read_path(&self.fs, req.path.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
                         match entry {
                             fs::DirEntry::Directory(_) => None,
                             fs::DirEntry::File(file) => self.fs.write(&file, &req.data).ok()
@@ -489,19 +489,16 @@ impl Vm {
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsCreateDir(req)) => {
-                    debug!("req base_dir {:?}", req.base_dir);
                     let label = proto_label_to_dc_label(req.label.clone().expect("label"));
                     let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
                         match entry {
                             fs::DirEntry::Directory(dir) => {
                                 let newdir = self.fs.create_directory(label);
-                                debug!("create_directory");
                                 self.fs.link(&dir, req.name, fs::DirEntry::Directory(newdir)).ok()
                             },
                             fs::DirEntry::File(_) => None,
                         }
                     });
-                    debug!("value {:?}", value);
                     let result = syscalls::WriteKeyResponse {
                         success: value.is_some()
                     }
@@ -511,7 +508,7 @@ impl Vm {
                 },
                 Some(SC::FsCreateFile(req)) => {
                     let label = proto_label_to_dc_label(req.label.clone().expect("label"));
-                    let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").map(String::from).collect()).ok().and_then(|entry| {
+                    let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
                         match entry {
                             fs::DirEntry::Directory(dir) => {
                                 let newfile = self.fs.create_file(label);

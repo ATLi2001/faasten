@@ -2,10 +2,10 @@
 
 
 use lmdb::{Transaction, WriteFlags};
-use log::debug;
+// use log::debug;
 use serde::{Serialize, Deserialize};
 use std::{collections::HashMap, cell::RefCell};
-use labeled::{dclabel::DCLabel, Label};
+use labeled::dclabel::DCLabel;
 
 pub use errors::*;
 
@@ -146,88 +146,50 @@ impl<S: BackingStore> FS<S> {
     }
 
     pub fn list(&self, dir: Directory) -> Result<HashMap<String, DirEntry>, LabelError> {
-        CURRENT_LABEL.with(|current_label| {
-            if dir.label.can_flow_to(&*current_label.borrow()) {
-                Ok(match self.storage.get(&dir.object_id.to_be_bytes()) {
-                    Some(bs) => {
-                        serde_json::from_slice(bs.as_slice()).unwrap_or_default()
-                    },
-                    None => {
-                        debug!("list default");
-                        Default::default()
-                    }
-                })
-            } else {
-                debug!("list cannot read");
-                Err(LabelError::CannotRead)
+        Ok(match self.storage.get(&dir.object_id.to_be_bytes()) {
+            Some(bs) => {
+                serde_json::from_slice(bs.as_slice()).unwrap_or_default()
+            },
+            None => {
+                Default::default()
             }
         })
     }
 
     pub fn link(&self, dir: &Directory, name: String, direntry: DirEntry) -> Result<String, LinkError>{
-        CURRENT_LABEL.with(|current_label| {
-            if !current_label.borrow().secrecy.implies(&dir.label.secrecy) {
-                debug!("cannot read");
-                return Err(LinkError::LabelError(LabelError::CannotRead));
+        let mut raw_dir: Option<Vec<u8>> = self.storage.get(&dir.object_id.to_be_bytes());
+        loop {
+            let mut dir_contents: HashMap<String, DirEntry> = raw_dir.as_ref().and_then(|dir_contents| serde_json::from_slice(dir_contents.as_slice()).ok()).unwrap_or_default();
+            if let Some(_) = dir_contents.insert(name.clone(), direntry.clone()) {
+                return Err(LinkError::Exists)
             }
-            if !current_label.borrow().can_flow_to(&dir.label) {
-                debug!("cannot write");
-                return Err(LinkError::LabelError(LabelError::CannotWrite));
+            match self.storage.cas(&dir.object_id.to_be_bytes(), raw_dir.as_ref().map(|e| e.as_ref()), &serde_json::to_vec(&dir_contents).unwrap_or_default()) {
+                Ok(()) => return Ok(name),
+                Err(rd) => raw_dir = rd,
             }
-            let mut raw_dir: Option<Vec<u8>> = self.storage.get(&dir.object_id.to_be_bytes());
-            loop {
-                let mut dir_contents: HashMap<String, DirEntry> = raw_dir.as_ref().and_then(|dir_contents| serde_json::from_slice(dir_contents.as_slice()).ok()).unwrap_or_default();
-                if let Some(_) = dir_contents.insert(name.clone(), direntry.clone()) {
-                    return Err(LinkError::Exists)
-                }
-                match self.storage.cas(&dir.object_id.to_be_bytes(), raw_dir.as_ref().map(|e| e.as_ref()), &serde_json::to_vec(&dir_contents).unwrap_or_default()) {
-                    Ok(()) => return Ok(name),
-                    Err(rd) => raw_dir = rd,
-                }
-            }
-        })
+        }
     }
 
     pub fn unlink(&self, dir: &Directory, name: String) -> Result<String, UnlinkError> {
-        CURRENT_LABEL.with(|current_label| {
-            if !current_label.borrow().secrecy.implies(&dir.label.secrecy) {
-                return Err(UnlinkError::LabelError(LabelError::CannotRead));
+        let mut raw_dir = self.storage.get(&dir.object_id.to_be_bytes());
+        loop {
+            let mut dir_contents: HashMap<String, DirEntry> = raw_dir.as_ref().and_then(|dir_contents| serde_json::from_slice(dir_contents.as_slice()).ok()).unwrap_or_default();
+            if dir_contents.remove(&name).is_none() {
+                return Err(UnlinkError::DoesNotExists)
             }
-            if !current_label.borrow().can_flow_to(&dir.label) {
-                return Err(UnlinkError::LabelError(LabelError::CannotWrite));
+            match self.storage.cas(&dir.object_id.to_be_bytes(), raw_dir.as_ref().map(|e| e.as_ref()), &serde_json::to_vec(&dir_contents).unwrap_or_default()) {
+                Ok(()) => return Ok(name),
+                Err(rd) => raw_dir = rd,
             }
-            let mut raw_dir = self.storage.get(&dir.object_id.to_be_bytes());
-            loop {
-                let mut dir_contents: HashMap<String, DirEntry> = raw_dir.as_ref().and_then(|dir_contents| serde_json::from_slice(dir_contents.as_slice()).ok()).unwrap_or_default();
-                if dir_contents.remove(&name).is_none() {
-                    return Err(UnlinkError::DoesNotExists)
-                }
-                match self.storage.cas(&dir.object_id.to_be_bytes(), raw_dir.as_ref().map(|e| e.as_ref()), &serde_json::to_vec(&dir_contents).unwrap_or_default()) {
-                    Ok(()) => return Ok(name),
-                    Err(rd) => raw_dir = rd,
-                }
-            }
-        })
+        }
     }
 
     pub fn read(&self, file: &File) -> Result<Vec<u8>, LabelError> {
-        CURRENT_LABEL.with(|current_label| {
-            if file.label.can_flow_to(&*current_label.borrow()) {
-                Ok(self.storage.get(&file.object_id.to_be_bytes()).unwrap_or_default())
-            } else {
-                Err(LabelError::CannotRead)
-            }
-        })
+        Ok(self.storage.get(&file.object_id.to_be_bytes()).unwrap_or_default())
     }
 
     pub fn write(&mut self, file: &File, data: &Vec<u8>) -> Result<(), LabelError> {
-        CURRENT_LABEL.with(|current_label| {
-            if current_label.borrow().can_flow_to(&file.label) {
-                Ok(self.storage.put(&file.object_id.to_be_bytes(), data))
-            } else {
-                Err(LabelError::CannotWrite)
-            }
-        })
+        Ok(self.storage.put(&file.object_id.to_be_bytes(), data))
     }
 
 }
@@ -272,37 +234,26 @@ pub mod utils {
     }
 
     pub fn read_path<S: Clone + BackingStore>(fs: &FS<S>, path: Vec<String>) -> Result<DirEntry, Error> {
-        debug!("path vec {:?}", path);
         if path.is_empty() {
             return Ok(fs.root().into());
         }
 
         if let Some((last, path)) = path.split_last() {
-            debug!("last: {:?}, path: {:?}", last, path);
             let direntry = path.iter().try_fold(fs.root().into(), |de, comp| -> Result<DirEntry, Error> {
                 match de {
                     super::DirEntry::Directory(dir) => {
-                        debug!("dir {:?}", dir.object_id);
-                        debug!("comp {:?}", comp);
-                        let tmp = fs.list(dir)?;
-                        debug!("list returns {:?}", tmp.keys());
-                        let tmp2 = tmp.get(comp).map(Clone::clone);
-                        debug!("comp in fs list(dir): {:?}", tmp2.is_some());
-                        tmp.get(comp).map(Clone::clone).ok_or(Error::BadPath)
+                        fs.list(dir)?.get(comp).map(Clone::clone).ok_or(Error::BadPath)
                     },
                     super::DirEntry::File(_) => Err(Error::BadPath)
                 }
             })?;
             match direntry {
                 super::DirEntry::Directory(dir) => {
-                    debug!("dir {:?}", dir.object_id);
-                    debug!("last {:?}", last);
                     fs.list(dir)?.get(last).map(Clone::clone).ok_or(Error::BadPath)
                 },
                 super::DirEntry::File(_) => Err(Error::BadPath)
             }
         } else {
-            debug!("bad path");
             Err(Error::BadPath)
         }
     }
