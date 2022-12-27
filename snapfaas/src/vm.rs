@@ -18,10 +18,9 @@ use crate::configs::FunctionConfig;
 use crate::message::Message;
 use crate::{blobstore, syscalls};
 use crate::request::Request;
-use crate::labeled_fs;
+// use crate::labeled_fs::DBENV;
+use crate::fs;
 use crate::distributed_db::db_client::DbClient;
-use crate::distributed_db::DbService;
-use crate::dclabel_helper::{dc_label_to_proto_label, proto_label_to_dc_label};
 
 const MACPREFIX: &str = "AA:BB:CC:DD";
 const GITHUB_REST_ENDPOINT: &str = "https://api.github.com";
@@ -29,8 +28,62 @@ const GITHUB_REST_API_VERSION_HEADER: &str = "application/json+vnd";
 const GITHUB_AUTH_TOKEN: &str = "GITHUB_AUTH_TOKEN";
 const USER_AGENT: &str = "snapfaas";
 
-use labeled::dclabel::{Component, DCLabel};
+use labeled::dclabel::{Clause, Component, DCLabel};
 use labeled::{Label, HasPrivilege};
+
+fn proto_label_to_dc_label(label: syscalls::DcLabel) -> DCLabel {
+    DCLabel {
+        secrecy: match label.secrecy {
+            None => Component::DCFalse,
+            Some(set) => Component::DCFormula(
+                set.clauses
+                    .iter()
+                    .map(|c| {
+                        Clause(c.principals.iter().map(Clone::clone).collect())
+                    })
+                    .collect(),
+            ),
+        },
+        integrity: match label.integrity {
+            None => Component::DCFalse,
+            Some(set) => Component::DCFormula(
+                set.clauses
+                    .iter()
+                    .map(|c| {
+                        Clause(c.principals.iter().map(Clone::clone).collect())
+                    })
+                    .collect(),
+            ),
+        },
+    }
+}
+
+fn dc_label_to_proto_label(label: &DCLabel) -> syscalls::DcLabel {
+    syscalls::DcLabel {
+        secrecy: match &label.secrecy {
+            Component::DCFalse => None,
+            Component::DCFormula(set) => Some(syscalls::Component {
+                clauses: set
+                    .iter()
+                    .map(|clause| syscalls::Clause {
+                        principals: clause.0.iter().map(Clone::clone).collect(),
+                    })
+                    .collect(),
+            }),
+        },
+        integrity: match &label.integrity {
+            Component::DCFalse => None,
+            Component::DCFormula(set) => Some(syscalls::Component {
+                clauses: set
+                    .iter()
+                    .map(|clause| syscalls::Clause {
+                        principals: clause.0.iter().map(Clone::clone).collect(),
+                    })
+                    .collect(),
+            }),
+        },
+    }
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -91,6 +144,7 @@ pub struct Vm {
     create_blobs: HashMap<u64, blobstore::NewBlob>,
     blobs: HashMap<u64, blobstore::Blob>,
     max_blob_id: u64,
+    fs: fs::FS<DbClient>,
 }
 
 impl Vm {
@@ -102,6 +156,8 @@ impl Vm {
         function_config: FunctionConfig,
         allow_network: bool,
     ) -> Self {
+        let address = function_config.db_server_address.clone();
+        let db_client = DbClient::new(address);
         Vm {
             id,
             allow_network,
@@ -118,6 +174,7 @@ impl Vm {
             create_blobs: Default::default(),
             blobs: Default::default(),
             max_blob_id: 0,
+            fs: fs::FS::new(db_client),
         }
     }
 
@@ -359,6 +416,7 @@ impl Vm {
         use std::io::Read;
         use syscalls::syscall::Syscall as SC;
         use syscalls::Syscall;
+        use crate::distributed_db::DbService;
 
 
         // let default_db = DBENV.open_db(None);
@@ -368,7 +426,7 @@ impl Vm {
 
         // let default_db = default_db.unwrap();
 
-        let mut db_client = DbClient::new(self.function_config.db_server_address.clone());
+        let db_client = DbClient::new(self.function_config.db_server_address.clone());
         loop {
             let buf = {
                 let mut lenbuf = [0;4];
@@ -404,38 +462,63 @@ impl Vm {
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsRead(req)) => {
+                    let value = fs::utils::read_path(&self.fs, req.path.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
+                        match entry {
+                            fs::DirEntry::Directory(_) => None,
+                            fs::DirEntry::File(file) => self.fs.read(&file).ok()
+                        }
+                    });
                     let result = syscalls::ReadKeyResponse {
-                        value: labeled_fs::read(req.path.as_str(), &mut self.current_label, &mut db_client).ok(),
-                    }
-                    .encode_to_vec();
+                        value
+                    }.encode_to_vec();
 
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsWrite(req)) => {
+                    let value = fs::utils::read_path(&self.fs, req.path.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
+                        match entry {
+                            fs::DirEntry::Directory(_) => None,
+                            fs::DirEntry::File(file) => self.fs.write(&file, &req.data).ok()
+                        }
+                    });
                     let result = syscalls::WriteKeyResponse {
-                        success: labeled_fs::write(req.path.as_str(), req.data, &mut self.current_label, &mut db_client).is_ok(),
+                        success: value.is_some()
                     }
                     .encode_to_vec();
 
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsCreateDir(req)) => {
-                    let label = proto_label_to_dc_label(req.label.expect("label"));
+                    let label = proto_label_to_dc_label(req.label.clone().expect("label"));
+                    let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
+                        match entry {
+                            fs::DirEntry::Directory(dir) => {
+                                let newdir = self.fs.create_directory(label);
+                                self.fs.link(&dir, req.name, fs::DirEntry::Directory(newdir)).ok()
+                            },
+                            fs::DirEntry::File(_) => None,
+                        }
+                    });
                     let result = syscalls::WriteKeyResponse {
-                        success: labeled_fs::create_dir(
-                            req.base_dir.as_str(), req.name.as_str(), label, &mut self.current_label, &mut db_client
-                        ).is_ok(),
+                        success: value.is_some()
                     }
                     .encode_to_vec();
 
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsCreateFile(req)) => {
-                    let label = proto_label_to_dc_label(req.label.expect("label"));
+                    let label = proto_label_to_dc_label(req.label.clone().expect("label"));
+                    let value = fs::utils::read_path(&self.fs, req.base_dir.split("/").skip_while(|s| s.is_empty()).map(String::from).collect()).ok().and_then(|entry| {
+                        match entry {
+                            fs::DirEntry::Directory(dir) => {
+                                let newfile = self.fs.create_file(label);
+                                self.fs.link(&dir, req.name, fs::DirEntry::File(newfile)).ok()
+                            },
+                            fs::DirEntry::File(_) => None,
+                        }
+                    });
                     let result = syscalls::WriteKeyResponse {
-                        success: labeled_fs::create_file(
-                            req.base_dir.as_str(), req.name.as_str(), label, &mut self.current_label, &mut db_client
-                        ).is_ok(),
+                        success: value.is_some()
                     }
                     .encode_to_vec();
 

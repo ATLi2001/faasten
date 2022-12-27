@@ -60,6 +60,11 @@ message CompareAndSwap {
   bytes value = 3;
 }
 
+message CompareAndSwapResponse {
+  bool success = 1;
+  optional bytes old = 2;
+}
+
 message ReadDir {
   bytes dir = 1;
 }
