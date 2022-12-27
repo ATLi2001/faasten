@@ -4,7 +4,7 @@ use lmdb::WriteFlags;
 
 use crate::syscalls;
 use syscalls::syscall::Syscall as SC;
-use crate::distributed_db::{DbService, Error};
+use crate::distributed_db::{DbService, Error, CACHE_ADDRESS};
 use crate::fs::BackingStore;
 use prost::Message;
 
@@ -42,6 +42,7 @@ impl r2d2::ManageConnection for DbServerManager {
 #[derive(Debug, Clone)]
 pub struct DbClient {
     // address: String,
+    cache: r2d2::Pool<DbServerManager>,
     conn: r2d2::Pool<DbServerManager>,
 }
 
@@ -97,6 +98,8 @@ impl BackingStore for DbClient {
             value: Vec::from(value),
             flags: None,
         });
+        let cache_conn = &mut self.cache.get().unwrap();
+        let _ = send_sc_get_response(sc.clone(), cache_conn);
         let conn = &mut self.conn.get().unwrap();
         let _ = send_sc_get_response(sc, conn);
     }
@@ -107,6 +110,8 @@ impl BackingStore for DbClient {
             value: Vec::from(value),
             flags: Some(WriteFlags::NO_OVERWRITE.bits()),
         });
+        let cache_conn = &mut self.cache.get().unwrap();
+        let _ = send_sc_get_response(sc.clone(), cache_conn);
         let conn = &mut self.conn.get().unwrap();
         let resp = send_sc_get_response(sc, conn);
         if resp.is_err() {
@@ -127,6 +132,8 @@ impl BackingStore for DbClient {
             expected: exp, 
             value: Vec::from(value),
         });
+        let cache_conn = &mut self.cache.get().unwrap();
+        let _ = send_sc_get_response(sc.clone(), cache_conn);
         let conn = &mut self.conn.get().unwrap();
         let resp = send_sc_get_response(sc, conn);
         let cas_res = syscalls::CompareAndSwapResponse::decode(resp.unwrap().as_ref()).unwrap();
@@ -142,9 +149,10 @@ impl BackingStore for DbClient {
 impl DbClient {
     pub fn new(address: String) -> Self {
         debug!("db_client created, server at {}", address.clone());
+        let cache = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: CACHE_ADDRESS.to_string() }).expect("cache pool");
         let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
 
-        DbClient {conn}
+        DbClient {cache, conn}
     }
 }
 

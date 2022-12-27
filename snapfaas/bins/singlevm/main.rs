@@ -5,7 +5,7 @@ extern crate clap;
 /// the request to VM, waits for VM's response and finally prints the response
 /// to stdout, kills the VM and exits.
 use snapfaas::vm::Vm;
-use snapfaas::distributed_db::db_server::DbServer;
+use snapfaas::distributed_db::{db_server::DbServer, CACHE_ADDRESS};
 use snapfaas::unlink_unix_sockets;
 use snapfaas::configs::FunctionConfig;
 use std::io::{BufRead};
@@ -231,8 +231,11 @@ fn main() {
     let firerunner = cmd_arguments.value_of("firerunner").unwrap().to_string();
     let allow_network = cmd_arguments.is_present("enable network");
 
-    let db_server = DbServer::new(vm_app_config.db_server_address.clone());
-    DbServer::start_dbserver(db_server);
+    // near db server is a like a cache, so it has fixed address
+    let near_db_server = DbServer::new("near_storage".to_string(), CACHE_ADDRESS.to_string());
+    DbServer::start_dbserver(near_db_server);
+    let far_db_server = DbServer::new("far_storage".to_string(), vm_app_config.db_server_address.clone());
+    DbServer::start_dbserver(far_db_server);
 
     // Launch a vm based on the FunctionConfig value
     let t1 = Instant::now();
