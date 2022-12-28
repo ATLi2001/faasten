@@ -1,0 +1,12 @@
+allow_network: false
+firerunner_path: "./target/debug/firerunner"
+kernel_path: "./resources/images/vmlinux-4.20.0"
+runtimefs_dir: "./rootfs"
+appfs_dir: "./hello"
+functions:
+  hello:
+    runtimefs: "python3.ext4"
+    appfs: "output.ext2"
+    vcpus: 1
+    memory: 128
+    concurrency_limit: 600
