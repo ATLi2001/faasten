@@ -9,4 +9,5 @@ functions:
     appfs: "output.ext2"
     vcpus: 1
     memory: 128
-    concurrency_limit: 600
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
