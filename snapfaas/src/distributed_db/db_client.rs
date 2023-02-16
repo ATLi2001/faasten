@@ -1,4 +1,6 @@
 use std::net::TcpStream;
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::{Arc, Mutex};
 use log::debug;
 use lmdb::WriteFlags;
 
@@ -44,6 +46,8 @@ pub struct DbClient {
     // address: String,
     cache: r2d2::Pool<DbServerManager>,
     conn: r2d2::Pool<DbServerManager>,
+    tx: Arc<Mutex<Sender<SC>>>,
+    rx: Arc<Mutex<Receiver<SC>>>,
 }
 
 // legacy for read key, write key, read dir, cas basic operations
@@ -100,8 +104,8 @@ impl BackingStore for DbClient {
         });
         let cache_conn = &mut self.cache.get().unwrap();
         let _ = send_sc_get_response(sc.clone(), cache_conn);
-        let conn = &mut self.conn.get().unwrap();
-        let _ = send_sc_get_response(sc, conn);
+
+        self.tx.lock().unwrap().send(sc).unwrap();
     }
 
     fn add(&self, key: &[u8], value: &[u8]) -> bool {
@@ -111,9 +115,10 @@ impl BackingStore for DbClient {
             flags: Some(WriteFlags::NO_OVERWRITE.bits()),
         });
         let cache_conn = &mut self.cache.get().unwrap();
-        let _ = send_sc_get_response(sc.clone(), cache_conn);
-        let conn = &mut self.conn.get().unwrap();
-        let resp = send_sc_get_response(sc, conn);
+        let resp = send_sc_get_response(sc.clone(), cache_conn);
+
+        self.tx.lock().unwrap().send(sc).unwrap();
+
         if resp.is_err() {
             false
         }
@@ -133,9 +138,10 @@ impl BackingStore for DbClient {
             value: Vec::from(value),
         });
         let cache_conn = &mut self.cache.get().unwrap();
-        let _ = send_sc_get_response(sc.clone(), cache_conn);
-        let conn = &mut self.conn.get().unwrap();
-        let resp = send_sc_get_response(sc, conn);
+        let resp = send_sc_get_response(sc.clone(), cache_conn);
+
+        self.tx.lock().unwrap().send(sc).unwrap();
+
         let cas_res = syscalls::CompareAndSwapResponse::decode(resp.unwrap().as_ref()).unwrap();
         if cas_res.success {
             Ok(())
@@ -151,8 +157,25 @@ impl DbClient {
         debug!("db_client created, server at {}", address.clone());
         let cache = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: CACHE_ADDRESS.to_string() }).expect("cache pool");
         let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
+        let (tx, rx) = channel();
 
-        DbClient {cache, conn}
+        DbClient {cache, conn, tx: Arc::new(Mutex::new(tx)), rx: Arc::new(Mutex::new(rx))}
+    }
+
+    pub fn start_dbclient(self) {
+        let arc_self = Arc::new(self);
+        let arc_self_clone = arc_self.clone();
+        std::thread::spawn(move || {
+            arc_self_clone.channel_listen();
+        });
+    }
+
+    pub fn channel_listen(&self) {
+        loop {
+            let sc = self.rx.lock().unwrap().recv().unwrap();
+            let conn = &mut self.conn.get().unwrap();
+            let _ = send_sc_get_response(sc, conn);
+        }
     }
 }
 
