@@ -16,6 +16,7 @@ use snapfaas::resource_manager::ResourceManager;
 use snapfaas::gateway;
 use snapfaas::message::Message;
 use snapfaas::worker::Worker;
+use snapfaas::distributed_db::{db_server::DbServer, CACHE_ADDRESS};
 
 use std::sync::{mpsc, Arc, Mutex};
 use std::sync::mpsc::Sender;
@@ -55,6 +56,10 @@ fn main() {
         )
         .get_matches();
 
+    // near db server is a like a cache, so it has fixed address
+    let near_db_server = DbServer::new("near_storage".to_string(), CACHE_ADDRESS.to_string());
+    DbServer::start_dbserver(near_db_server);
+    
     // populate the in-memory config struct
     let config_path = matches.value_of("config").unwrap();
     let config = configs::ResourceManagerConfig::new(config_path);

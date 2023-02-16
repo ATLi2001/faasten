@@ -9,7 +9,7 @@ use log::{error, debug};
 
 use crate::syscalls;
 use crate::fs::DirEntry;
-
+use crate::distributed_db::{CACHE_ADDRESS, RESPONSE_DELAY_TIME};
 
 #[derive(Debug)]
 pub enum Error {
@@ -21,6 +21,7 @@ pub enum Error {
 
 #[derive(Debug)]
 pub struct DbServer {
+    name: String,
     address: String,
     db: Mutex<Database>,
     dbenv: Mutex<lmdb::Environment>,
@@ -28,14 +29,14 @@ pub struct DbServer {
 
 impl DbServer {
 
-    pub fn new(address: String) -> Self {
-        if !std::path::Path::new("storage").exists() {
-            let _ = std::fs::create_dir("storage").unwrap();
+    pub fn new(name: String, address: String) -> Self {
+        if !std::path::Path::new(&name.clone()).exists() {
+            let _ = std::fs::create_dir(name.clone()).unwrap();
         }
         
         let dbenv = lmdb::Environment::new()
             .set_map_size(100 * 1024 * 1024 * 1024)
-            .open(std::path::Path::new("storage"))
+            .open(std::path::Path::new(&name.clone()))
             .unwrap();
 
         // Create the root directory object at key 0 if not already exists.
@@ -50,6 +51,7 @@ impl DbServer {
         txn.commit().unwrap();
 
         DbServer { 
+            name, 
             address, 
             db: Mutex::new(default_db), 
             dbenv: Mutex::new(dbenv),
@@ -58,6 +60,12 @@ impl DbServer {
 
     fn send_response(&self, mut stream: TcpStream, response: Vec<u8>) -> Result<(), Error> {
         use std::io::Write;
+
+        // if not the cache, have a slight delay before sending response 
+        // this is to simulate the delay in replicating the data
+        if self.address != CACHE_ADDRESS {
+            std::thread::sleep(std::time::Duration::from_millis(RESPONSE_DELAY_TIME));
+        }
 
         stream.write_all(&(response.len() as u32).to_be_bytes()).map_err(|e| Error::TcpWrite(e))?;
         stream.write_all(response.as_ref()).map_err(|e| Error::TcpWrite(e))

@@ -1,6 +1,10 @@
 pub mod db_server;
 pub mod db_client;
 
+pub const CACHE_ADDRESS: &str = "127.0.0.1:5000";
+// delay time of db server in ms
+pub const RESPONSE_DELAY_TIME: u64 = 50;
+
 #[derive(Debug)]
 pub enum Error {
     TcpConnectionError,
