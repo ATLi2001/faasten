@@ -1,6 +1,7 @@
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
 use log::debug;
 use lmdb::WriteFlags;
 
@@ -48,6 +49,7 @@ pub struct DbClient {
     conn: r2d2::Pool<DbServerManager>,
     tx: Arc<Mutex<Sender<SC>>>,
     rx: Arc<Mutex<Receiver<SC>>>,
+    handle: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 // legacy for read key, write key, read dir, cas basic operations
@@ -102,10 +104,17 @@ impl BackingStore for DbClient {
             value: Vec::from(value),
             flags: None,
         });
-        let cache_conn = &mut self.cache.get().unwrap();
-        let _ = send_sc_get_response(sc.clone(), cache_conn);
-
-        self.tx.lock().unwrap().send(sc).unwrap();
+        // special value of EXTERNALIZE is not put in db
+        if value == "EXTERNALIZE".as_bytes() {
+            self.tx.lock().unwrap().send(sc).unwrap();
+            self.handle.lock().unwrap().take().map(JoinHandle::join).unwrap().expect("failed to join recv channel thread");
+            self.start_dbclient();
+        }
+        else {
+            let cache_conn = &mut self.cache.get().unwrap();
+            let _ = send_sc_get_response(sc.clone(), cache_conn);
+            self.tx.lock().unwrap().send(sc).unwrap();
+        }
     }
 
     fn add(&self, key: &[u8], value: &[u8]) -> bool {
@@ -159,20 +168,34 @@ impl DbClient {
         let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
         let (tx, rx) = channel();
 
-        DbClient {cache, conn, tx: Arc::new(Mutex::new(tx)), rx: Arc::new(Mutex::new(rx))}
+        DbClient {
+            cache, 
+            conn, 
+            tx: Arc::new(Mutex::new(tx)), 
+            rx: Arc::new(Mutex::new(rx)), 
+            handle: Arc::new(Mutex::new(None)),
+        }
     }
 
     pub fn start_dbclient(self) {
         let arc_self = Arc::new(self);
         let arc_self_clone = arc_self.clone();
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             arc_self_clone.channel_listen();
         });
+        *arc_self.handle.lock().unwrap() = Some(handle);
     }
 
     pub fn channel_listen(&self) {
         loop {
             let sc = self.rx.lock().unwrap().recv().unwrap();
+            // special value EXTERNALIZE means end function
+            if let SC::WriteKey(wk) = sc.clone() {
+                if wk.value == Vec::from("EXTERNALIZE".as_bytes()) {
+                    break;
+                }
+            }
+
             let conn = &mut self.conn.get().unwrap();
             let _ = send_sc_get_response(sc, conn);
         }
