@@ -91,6 +91,7 @@ impl DbService for DbClient {
 impl BackingStore for DbClient {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         let sc = SC::ReadKey(syscalls::ReadKey {key: Vec::from(key)});
+        // TODO - currently reading from global for testing purpose
         let conn = &mut self.conn.get().unwrap();
         let resp = send_sc_get_response(sc, conn);
         if resp.is_err() {
@@ -135,7 +136,12 @@ impl BackingStore for DbClient {
         let resp = send_sc_get_response(sc.clone(), cache_conn);
 
         // need to be synchronous
-        self.tx.lock().unwrap().send(SyscallChannel{syscall: sc, send_chan: None}).unwrap();
+        let (ext_send, ext_recv) = channel();
+            self.tx.lock().unwrap().send(
+                SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
+            ).unwrap();
+        // wait on response
+        let _ = ext_recv.recv().unwrap();
 
         if resp.is_err() {
             false
@@ -159,8 +165,13 @@ impl BackingStore for DbClient {
         let resp = send_sc_get_response(sc.clone(), cache_conn);
 
         // need to be synchronous
-        self.tx.lock().unwrap().send(SyscallChannel{syscall: sc, send_chan: None}).unwrap();
-
+        let (ext_send, ext_recv) = channel();
+        self.tx.lock().unwrap().send(
+            SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
+        ).unwrap();
+        // wait on response
+        let _ = ext_recv.recv().unwrap();
+        
         let cas_res = syscalls::CompareAndSwapResponse::decode(resp.unwrap().as_ref()).unwrap();
         if cas_res.success {
             Ok(())
