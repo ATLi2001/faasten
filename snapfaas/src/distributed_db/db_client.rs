@@ -1,7 +1,6 @@
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
 use log::debug;
 use lmdb::WriteFlags;
 
@@ -42,14 +41,18 @@ impl r2d2::ManageConnection for DbServerManager {
     }
 }
 
+struct SyscallChannel {
+    syscall: SC,
+    send_chan: Option<Sender<bool>>,
+}
+
 #[derive(Debug, Clone)]
 pub struct DbClient {
     // address: String,
     cache: r2d2::Pool<DbServerManager>,
     conn: r2d2::Pool<DbServerManager>,
-    tx: Arc<Mutex<Sender<SC>>>,
-    rx: Arc<Mutex<Receiver<SC>>>,
-    handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    tx: Arc<Mutex<Sender<SyscallChannel>>>,
+    rx: Arc<Mutex<Receiver<SyscallChannel>>>,
 }
 
 // legacy for read key, write key, read dir, cas basic operations
@@ -106,14 +109,19 @@ impl BackingStore for DbClient {
         });
         // special value of EXTERNALIZE is not put in db
         if value == "EXTERNALIZE".as_bytes() {
-            self.tx.lock().unwrap().send(sc).unwrap();
-            self.handle.lock().unwrap().take().map(JoinHandle::join).unwrap().expect("failed to join recv channel thread");
-            self.start_dbclient();
+            let (ext_send, ext_recv) = channel();
+            self.tx.lock().unwrap().send(
+                SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
+            ).unwrap();
+            // wait on response
+            let _ = ext_recv.recv().unwrap();
         }
         else {
             let cache_conn = &mut self.cache.get().unwrap();
             let _ = send_sc_get_response(sc.clone(), cache_conn);
-            self.tx.lock().unwrap().send(sc).unwrap();
+            self.tx.lock().unwrap().send(
+                SyscallChannel{syscall: sc, send_chan: None}
+            ).unwrap();
         }
     }
 
@@ -126,7 +134,8 @@ impl BackingStore for DbClient {
         let cache_conn = &mut self.cache.get().unwrap();
         let resp = send_sc_get_response(sc.clone(), cache_conn);
 
-        self.tx.lock().unwrap().send(sc).unwrap();
+        // need to be synchronous
+        self.tx.lock().unwrap().send(SyscallChannel{syscall: sc, send_chan: None}).unwrap();
 
         if resp.is_err() {
             false
@@ -149,7 +158,8 @@ impl BackingStore for DbClient {
         let cache_conn = &mut self.cache.get().unwrap();
         let resp = send_sc_get_response(sc.clone(), cache_conn);
 
-        self.tx.lock().unwrap().send(sc).unwrap();
+        // need to be synchronous
+        self.tx.lock().unwrap().send(SyscallChannel{syscall: sc, send_chan: None}).unwrap();
 
         let cas_res = syscalls::CompareAndSwapResponse::decode(resp.unwrap().as_ref()).unwrap();
         if cas_res.success {
@@ -173,27 +183,24 @@ impl DbClient {
             conn, 
             tx: Arc::new(Mutex::new(tx)), 
             rx: Arc::new(Mutex::new(rx)), 
-            handle: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn start_dbclient(self) {
         let arc_self = Arc::new(self);
         let arc_self_clone = arc_self.clone();
-        let handle = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             arc_self_clone.channel_listen();
         });
-        *arc_self.handle.lock().unwrap() = Some(handle);
     }
 
     pub fn channel_listen(&self) {
         loop {
-            let sc = self.rx.lock().unwrap().recv().unwrap();
-            // special value EXTERNALIZE means end function
-            if let SC::WriteKey(wk) = sc.clone() {
-                if wk.value == Vec::from("EXTERNALIZE".as_bytes()) {
-                    break;
-                }
+            let sc_chan = self.rx.lock().unwrap().recv().unwrap();
+            let sc = sc_chan.syscall;
+            if sc_chan.send_chan.is_some() {
+                let ext_send = sc_chan.send_chan.unwrap();
+                ext_send.send(true).unwrap();
             }
 
             let conn = &mut self.conn.get().unwrap();
