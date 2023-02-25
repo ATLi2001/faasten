@@ -110,19 +110,12 @@ impl BackingStore for DbClient {
         });
         // special value of EXTERNALIZE is not put in db
         if value == "EXTERNALIZE".as_bytes() {
-            let (ext_send, ext_recv) = channel();
-            self.tx.lock().unwrap().send(
-                SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
-            ).unwrap();
-            // wait on response
-            let _ = ext_recv.recv().unwrap();
+            self.send_to_background_thread(sc, true);
         }
         else {
             let cache_conn = &mut self.cache.get().unwrap();
             let _ = send_sc_get_response(sc.clone(), cache_conn);
-            self.tx.lock().unwrap().send(
-                SyscallChannel{syscall: sc, send_chan: None}
-            ).unwrap();
+            self.send_to_background_thread(sc, false);
         }
     }
 
@@ -135,13 +128,7 @@ impl BackingStore for DbClient {
         let cache_conn = &mut self.cache.get().unwrap();
         let resp = send_sc_get_response(sc.clone(), cache_conn);
 
-        // need to be synchronous
-        let (ext_send, ext_recv) = channel();
-            self.tx.lock().unwrap().send(
-                SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
-            ).unwrap();
-        // wait on response
-        let _ = ext_recv.recv().unwrap();
+        self.send_to_background_thread(sc, true);
 
         if resp.is_err() {
             false
@@ -164,13 +151,7 @@ impl BackingStore for DbClient {
         let cache_conn = &mut self.cache.get().unwrap();
         let resp = send_sc_get_response(sc.clone(), cache_conn);
 
-        // need to be synchronous
-        let (ext_send, ext_recv) = channel();
-        self.tx.lock().unwrap().send(
-            SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
-        ).unwrap();
-        // wait on response
-        let _ = ext_recv.recv().unwrap();
+        self.send_to_background_thread(sc, true);
         
         let cas_res = syscalls::CompareAndSwapResponse::decode(resp.unwrap().as_ref()).unwrap();
         if cas_res.success {
@@ -216,6 +197,22 @@ impl DbClient {
 
             let conn = &mut self.conn.get().unwrap();
             let _ = send_sc_get_response(sc, conn);
+        }
+    }
+
+    fn send_to_background_thread(&self, sc: SC, synchronous: bool) {
+        if synchronous {
+            let (ext_send, ext_recv) = channel();
+            self.tx.lock().unwrap().send(
+                SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
+            ).unwrap();
+            // wait on response
+            let _ = ext_recv.recv().unwrap();
+        }
+        else {
+            self.tx.lock().unwrap().send(
+                SyscallChannel{syscall: sc, send_chan: None}
+            ).unwrap();
         }
     }
 }
