@@ -158,6 +158,8 @@ impl Vm {
     ) -> Self {
         let address = function_config.db_server_address.clone();
         let db_client = DbClient::new(address);
+        let db_client_clone = db_client.clone();
+        db_client_clone.start_dbclient();
         Vm {
             id,
             allow_network,

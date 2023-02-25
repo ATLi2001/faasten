@@ -1,4 +1,6 @@
 use std::net::TcpStream;
+use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::{Arc, Mutex};
 use log::debug;
 use lmdb::WriteFlags;
 
@@ -39,11 +41,18 @@ impl r2d2::ManageConnection for DbServerManager {
     }
 }
 
+struct SyscallChannel {
+    syscall: SC,
+    send_chan: Option<Sender<bool>>,
+}
+
 #[derive(Debug, Clone)]
 pub struct DbClient {
     // address: String,
     cache: r2d2::Pool<DbServerManager>,
     conn: r2d2::Pool<DbServerManager>,
+    tx: Arc<Mutex<Sender<SyscallChannel>>>,
+    rx: Arc<Mutex<Receiver<SyscallChannel>>>,
 }
 
 // legacy for read key, write key, read dir, cas basic operations
@@ -82,6 +91,7 @@ impl DbService for DbClient {
 impl BackingStore for DbClient {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         let sc = SC::ReadKey(syscalls::ReadKey {key: Vec::from(key)});
+        // TODO - currently reading from global for testing purpose
         let conn = &mut self.conn.get().unwrap();
         let resp = send_sc_get_response(sc, conn);
         if resp.is_err() {
@@ -98,10 +108,15 @@ impl BackingStore for DbClient {
             value: Vec::from(value),
             flags: None,
         });
-        let cache_conn = &mut self.cache.get().unwrap();
-        let _ = send_sc_get_response(sc.clone(), cache_conn);
-        let conn = &mut self.conn.get().unwrap();
-        let _ = send_sc_get_response(sc, conn);
+        // special value of EXTERNALIZE is not put in db
+        if value == "EXTERNALIZE".as_bytes() {
+            self.send_to_background_thread(sc, true);
+        }
+        else {
+            let cache_conn = &mut self.cache.get().unwrap();
+            let _ = send_sc_get_response(sc.clone(), cache_conn);
+            self.send_to_background_thread(sc, false);
+        }
     }
 
     fn add(&self, key: &[u8], value: &[u8]) -> bool {
@@ -111,9 +126,10 @@ impl BackingStore for DbClient {
             flags: Some(WriteFlags::NO_OVERWRITE.bits()),
         });
         let cache_conn = &mut self.cache.get().unwrap();
-        let _ = send_sc_get_response(sc.clone(), cache_conn);
-        let conn = &mut self.conn.get().unwrap();
-        let resp = send_sc_get_response(sc, conn);
+        let resp = send_sc_get_response(sc.clone(), cache_conn);
+
+        self.send_to_background_thread(sc, true);
+
         if resp.is_err() {
             false
         }
@@ -133,9 +149,10 @@ impl BackingStore for DbClient {
             value: Vec::from(value),
         });
         let cache_conn = &mut self.cache.get().unwrap();
-        let _ = send_sc_get_response(sc.clone(), cache_conn);
-        let conn = &mut self.conn.get().unwrap();
-        let resp = send_sc_get_response(sc, conn);
+        let resp = send_sc_get_response(sc.clone(), cache_conn);
+
+        self.send_to_background_thread(sc, true);
+        
         let cas_res = syscalls::CompareAndSwapResponse::decode(resp.unwrap().as_ref()).unwrap();
         if cas_res.success {
             Ok(())
@@ -151,8 +168,52 @@ impl DbClient {
         debug!("db_client created, server at {}", address.clone());
         let cache = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: CACHE_ADDRESS.to_string() }).expect("cache pool");
         let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
+        let (tx, rx) = channel();
 
-        DbClient {cache, conn}
+        DbClient {
+            cache, 
+            conn, 
+            tx: Arc::new(Mutex::new(tx)), 
+            rx: Arc::new(Mutex::new(rx)), 
+        }
+    }
+
+    pub fn start_dbclient(self) {
+        let arc_self = Arc::new(self);
+        let arc_self_clone = arc_self.clone();
+        std::thread::spawn(move || {
+            arc_self_clone.channel_listen();
+        });
+    }
+
+    pub fn channel_listen(&self) {
+        loop {
+            let sc_chan = self.rx.lock().unwrap().recv().unwrap();
+            let sc = sc_chan.syscall;
+            if sc_chan.send_chan.is_some() {
+                let ext_send = sc_chan.send_chan.unwrap();
+                ext_send.send(true).unwrap();
+            }
+
+            let conn = &mut self.conn.get().unwrap();
+            let _ = send_sc_get_response(sc, conn);
+        }
+    }
+
+    fn send_to_background_thread(&self, sc: SC, synchronous: bool) {
+        if synchronous {
+            let (ext_send, ext_recv) = channel();
+            self.tx.lock().unwrap().send(
+                SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
+            ).unwrap();
+            // wait on response
+            let _ = ext_recv.recv().unwrap();
+        }
+        else {
+            self.tx.lock().unwrap().send(
+                SyscallChannel{syscall: sc, send_chan: None}
+            ).unwrap();
+        }
     }
 }
 
