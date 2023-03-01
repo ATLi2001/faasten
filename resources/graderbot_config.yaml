@@ -1,0 +1,69 @@
+allow_network: false
+firerunner_path: "./target/debug/firerunner"
+kernel_path: "./resources/images/vmlinux-4.20.0"
+runtimefs_dir: "./rootfs"
+appfs_dir: "../graderbot-functions/output"
+functions:
+  start_assignment:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "start_assignment.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  gh_repo:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "gh_repo.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  go_grader:
+    vcpus: 1
+    memory: 256
+    runtimefs: "python3.ext4"
+    appfs: "go_grader.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  cos326_grader:
+    vcpus: 1
+    memory: 512
+    runtimefs: "python3.ext4"
+    appfs: "cos326_grader.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  cos326_parse_results:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "cos326_parse_results.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  cos326_parse_comment:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "cos326_parse_comment.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  grades:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "grades.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  generate_report:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "generate_report.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  post_comment:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "post_comment.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
