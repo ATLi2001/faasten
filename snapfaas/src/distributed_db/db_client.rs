@@ -58,27 +58,44 @@ pub struct DbClient {
 // legacy for read key, write key, read dir, cas basic operations
 impl DbService for DbClient {
     fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
+        debug!("DbService get");
         let sc = SC::ReadKey(syscalls::ReadKey {key});
         let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
         send_sc_get_response(sc, conn)
     }
 
     fn put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
+        debug!("DbService put");
+        let key_clone = key.clone();
         let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags: None});
-        let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
-        send_sc_get_response(sc, conn)
+
+        let cache_conn = &mut self.cache.get().unwrap();
+        let resp = send_sc_get_response(sc.clone(), cache_conn);
+        // special value of EXTERNALIZE is not put in db
+        if key_clone == "EXTERNALIZE".as_bytes() {
+            debug!("externalization happening");
+            self.send_to_background_thread(sc, true);
+        }
+        else {
+            self.send_to_background_thread(sc, false);
+        }
+        resp        
     }
 
     fn add(&self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
         let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags: Some(WriteFlags::NO_OVERWRITE.bits())});
-        let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
-        send_sc_get_response(sc, conn)
+        let cache_conn = &mut self.cache.get().unwrap();
+        let resp = send_sc_get_response(sc.clone(), cache_conn);
+        self.send_to_background_thread(sc, true);
+        resp
     }
 
     fn cas(&self, key: Vec<u8>, expected: Option<Vec<u8>>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
         let sc = SC::CompareAndSwap(syscalls::CompareAndSwap {key, expected, value});
-        let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
-        send_sc_get_response(sc, conn)
+        let cache_conn = &mut self.cache.get().unwrap();
+        let resp = send_sc_get_response(sc.clone(), cache_conn);
+        self.send_to_background_thread(sc, true);
+        resp
     }
     
     fn scan(&self, dir: Vec<u8>) -> Result<Vec<u8>, Error> {
@@ -187,7 +204,10 @@ impl DbClient {
     }
 
     pub fn channel_listen(&self) {
+        let mut i = 0;
         loop {
+            debug!("background thread count = {}", i);
+            i += 1;
             let sc_chan = self.rx.lock().unwrap().recv().unwrap();
             let sc = sc_chan.syscall;
             if sc_chan.send_chan.is_some() {
@@ -202,6 +222,7 @@ impl DbClient {
 
     fn send_to_background_thread(&self, sc: SC, synchronous: bool) {
         if synchronous {
+            debug!("send to background thread sync");
             let (ext_send, ext_recv) = channel();
             self.tx.lock().unwrap().send(
                 SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
@@ -210,6 +231,7 @@ impl DbClient {
             let _ = ext_recv.recv().unwrap();
         }
         else {
+            debug!("send to background thread async");
             self.tx.lock().unwrap().send(
                 SyscallChannel{syscall: sc, send_chan: None}
             ).unwrap();

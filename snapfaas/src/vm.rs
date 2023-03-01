@@ -144,6 +144,7 @@ pub struct Vm {
     create_blobs: HashMap<u64, blobstore::NewBlob>,
     blobs: HashMap<u64, blobstore::Blob>,
     max_blob_id: u64,
+    db_client: DbClient,
     fs: fs::FS<DbClient>,
 }
 
@@ -159,7 +160,9 @@ impl Vm {
         let address = function_config.db_server_address.clone();
         let db_client = DbClient::new(address);
         let db_client_clone = db_client.clone();
+        let db_client_clone2 = db_client.clone();
         db_client_clone.start_dbclient();
+        
         Vm {
             id,
             allow_network,
@@ -176,6 +179,7 @@ impl Vm {
             create_blobs: Default::default(),
             blobs: Default::default(),
             max_blob_id: 0,
+            db_client: db_client_clone2, 
             fs: fs::FS::new(db_client),
         }
     }
@@ -428,7 +432,7 @@ impl Vm {
 
         // let default_db = default_db.unwrap();
 
-        let db_client = DbClient::new(self.function_config.db_server_address.clone());
+        // let db_client = DbClient::new(self.function_config.db_server_address.clone());
         loop {
             let buf = {
                 let mut lenbuf = [0;4];
@@ -448,19 +452,19 @@ impl Vm {
                     self.send_into_vm(result.encode_to_vec())?;
                 }
                 Some(SC::ReadKey(rk)) =>{
-                    let result = db_client.get(rk.key).unwrap();
+                    let result = self.db_client.get(rk.key).unwrap();
                     self.send_into_vm(result)?;
                 }
                 Some(SC::WriteKey(wk)) => {
-                    let result = db_client.put(wk.key, wk.value).unwrap();
+                    let result = self.db_client.put(wk.key, wk.value).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::ReadDir(req)) => {
-                    let result = db_client.scan(req.dir).unwrap();
+                    let result = self.db_client.scan(req.dir).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::CompareAndSwap(cas)) => {
-                    let result = db_client.cas(cas.key, cas.expected, cas.value).unwrap();
+                    let result = self.db_client.cas(cas.key, cas.expected, cas.value).unwrap();
                     self.send_into_vm(result)?;
                 },
                 Some(SC::FsRead(req)) => {
