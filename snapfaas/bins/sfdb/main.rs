@@ -1,9 +1,6 @@
 #[macro_use(crate_version, crate_authors)]
 extern crate clap;
 use clap::{App, Arg};
-use lmdb::{Cursor, Transaction, WriteFlags};
-use byteorder::{BigEndian, ByteOrder};
-use std::io::Write;
 
 use snapfaas::distributed_db::{db_server::DbServer, db_client::DbClient, DbService, CACHE_ADDRESS};
 
