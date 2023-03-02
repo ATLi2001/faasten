@@ -51,4 +51,6 @@ fn main() {
         println!("{}", String::from_utf8_lossy(&output));
     }
 
+    let _ = db_client.put(Vec::from("EXTERNALIZE"), Vec::from("EXTERNALIZE"));
+
 }
