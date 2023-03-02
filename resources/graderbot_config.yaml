@@ -67,3 +67,17 @@ functions:
     appfs: "post_comment.img"
     concurrency_limit: 100
     db_server_address: "127.0.0.1:7878"
+  graderbot_pre_process:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "graderbot_pre_process.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  graderbot_post_process:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "graderbot_post_process.img"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"

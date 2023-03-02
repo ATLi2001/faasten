@@ -1,0 +1,1 @@
+{"args": {"submission": "github/cos316/example/submission.tgz"}, "workflow": [ "go_grader", "grades", "generate_report", "graderbot_post_process" ], "context": { "repository": "cos316/example/", "commit": "b541c851d79edad1d05fc64c1bcca88800703a30", "push_date": 1642798607, "metadata": {"assignment": "example"}}}
