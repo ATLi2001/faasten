@@ -175,9 +175,10 @@ impl ResourceManager {
             self.total_num_vms += 1;
             let id = self.total_num_vms;
             self.free_mem -= function_config.memory;
-
-            let far_db_server = DbServer::new("far_storage".to_string(), function_config.db_server_address.clone());
-            DbServer::start_dbserver(far_db_server);
+            
+            // future - could have cache per vm
+            // let db_server = DbServer::new("cache_storage".to_string(), function_config.db_server_address.clone());
+            // DbServer::start_dbserver(far_db_server);
 
             debug!("Allocating new VM. ID: {:?}, App: {:?}", id, function_name);
             Ok(Vm::new(id, self.config.firerunner_path.clone(), function_name.to_string(), function_config, self.config.allow_network))

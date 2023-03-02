@@ -54,11 +54,23 @@ fn main() {
                 .required(true)
                 .help("Total memory available for all VMs")
         )
+        .arg(
+            Arg::with_name("db server address")
+                .value_name("[ADDR:]PORT")
+                .long("db_listen")
+                .takes_value(true)
+                .required(false)
+                .default_value("127.0.0.1:7878")
+                .help("Address on which database listens")
+        )
         .get_matches();
 
-    // near db server is a like a cache, so it has fixed address
+    // current implementation has fixed cache for all 
     let near_db_server = DbServer::new("near_storage".to_string(), CACHE_ADDRESS.to_string());
     DbServer::start_dbserver(near_db_server);
+    // one global db 
+    let far_db_server = DbServer::new("far_storage".to_string(), matches.value_of("db server address").expect("db server address").to_string());
+    DbServer::start_dbserver(far_db_server);
     
     // populate the in-memory config struct
     let config_path = matches.value_of("config").unwrap();
