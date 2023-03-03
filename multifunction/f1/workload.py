@@ -21,7 +21,7 @@ def app_handle(args, context, syscall):
         args["f1"] = "v1"
     else:
         prev_val = syscall.read_key(bytes("f1", "utf-8")).decode("utf-8")
-        new_key = "f2_%s_%s" % (prev_val, context["time"])
+        new_key = "f1_%s_%s_%d" % (prev_val, context["time"], initial_val)
         syscall.write_key(bytes(new_key, "utf-8"), bytes("v1", "utf-8"))
         args[new_key] = "v1"
 
