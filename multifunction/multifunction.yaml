@@ -1,0 +1,27 @@
+allow_network: false
+firerunner_path: "./target/debug/firerunner"
+kernel_path: "./resources/images/vmlinux-4.20.0"
+runtimefs_dir: "./rootfs"
+appfs_dir: "./multifunction"
+functions:
+  f1:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "f1/output_f1.ext2"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  f2:
+    vcpus: 1
+    memory: 128
+    runtimefs: "python3.ext4"
+    appfs: "f2/output_f2.ext2"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
+  f3:
+    vcpus: 1
+    memory: 256
+    runtimefs: "python3.ext4"
+    appfs: "f3/output_f3.ext2"
+    concurrency_limit: 100
+    db_server_address: "127.0.0.1:7878"
