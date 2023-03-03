@@ -1,7 +1,10 @@
-FUNCTIONS=f1 f2 f3
-OUTPUTS=$(patsubst %, %/output_%.ext2, $(FUNCTIONS))
+all: f1/output_f1.ext2 f2/output_f2.ext2 f3/output_f3.ext2
 
-all: $(OUTPUTS)
+f1/output_f1.ext2: f1/workload.py
+	make -C f1
 
-%/output_%.ext2: %/*
-	make -C %/*
+f2/output_f2.ext2: f2/workload.py
+	make -C f2
+
+f3/output_f3.ext2: f3/workload.py
+	make -C f3
