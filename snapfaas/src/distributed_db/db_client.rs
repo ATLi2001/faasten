@@ -60,8 +60,8 @@ impl DbService for DbClient {
     fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
         debug!("DbService get");
         let sc = SC::ReadKey(syscalls::ReadKey {key});
-        let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
-        send_sc_get_response(sc, conn)
+        let cache_conn = &mut self.cache.get().unwrap();
+        send_sc_get_response(sc, cache_conn)
     }
 
     fn put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
@@ -108,9 +108,8 @@ impl DbService for DbClient {
 impl BackingStore for DbClient {
     fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
         let sc = SC::ReadKey(syscalls::ReadKey {key: Vec::from(key)});
-        // TODO - currently reading from global for testing purpose
-        let conn = &mut self.conn.get().unwrap();
-        let resp = send_sc_get_response(sc, conn);
+        let cache_conn = &mut self.cache.get().unwrap();
+        let resp = send_sc_get_response(sc, cache_conn);
         if resp.is_err() {
             None
         }
