@@ -207,15 +207,16 @@ impl DbClient {
         loop {
             debug!("background thread count = {}", i);
             i += 1;
+
+            let conn = &mut self.conn.get().unwrap();
+            let _ = send_sc_get_response(sc, conn);
+
             let sc_chan = self.rx.lock().unwrap().recv().unwrap();
             let sc = sc_chan.syscall;
             if sc_chan.send_chan.is_some() {
                 let ext_send = sc_chan.send_chan.unwrap();
                 ext_send.send(true).unwrap();
             }
-
-            let conn = &mut self.conn.get().unwrap();
-            let _ = send_sc_get_response(sc, conn);
         }
     }
 
