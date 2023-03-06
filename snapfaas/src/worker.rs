@@ -67,6 +67,7 @@ fn handle_request(req: Request, rsp_sender: Sender<Response>, func_req_sender: S
                 match vm.process_req(req.payload.clone()) {
                     Ok(rsp) => {
                         tsps.completed = precise_time_ns();
+                        stat.push(tsps);
                         // TODO: output are currently ignored
                         debug!("{:?}", rsp);
                         vm_req_sender.send(Message::ReleaseVm(vm)).expect("Failed to send ReleaseVm request");
@@ -108,7 +109,7 @@ fn handle_request(req: Request, rsp_sender: Sender<Response>, func_req_sender: S
         status: result
     });
     // insert the request's timestamps
-    stat.push(tsps);
+    // stat.push(tsps);
 
 }
 
