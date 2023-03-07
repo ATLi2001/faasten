@@ -36,7 +36,7 @@ def app_handle(args, context, syscall):
         bytes(json.dumps(assignments), "utf-8")
     )
 
-    config = {"test": {"TestNegate": {"points": 3}}, "subtest": {"delim": '\n'}}
+    config = {"tests": {"TestNegate": {"points": 3, "extraCredit": False, "desc": "test negation"}}, "subtest": {"delim": '\n'}}
     syscall.write_key(
         bytes("cos316/example/grader_config", "utf-8"), 
         bytes(json.dumps(config), "utf-8")

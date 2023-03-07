@@ -18,6 +18,6 @@ def handle(req, syscall):
 def app_handle(args, context, syscall):
     syscall.write_key(bytes("EXTERNALIZE", "utf-8"), bytes("EXTERNALIZE", "utf-8"))
 
-    resp = syscall.read_key(bytes(args["report"], "utf-8"))
+    grade_report = syscall.read_key(bytes(args["report"], "utf-8")).decode("utf-8")
 
-    return resp
+    return {"grade_report": grade_report}
