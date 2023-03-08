@@ -5,22 +5,24 @@ OUTDIR="~/faasten/out"
 RESULTDIR="~/faasten/experiments/synthetic/single"
 
 if [ $# -ne 4 ]; then
-    echo 'usage: ./run_synthetic.sh MIN_MS MAX_MS STEP REPS'
+    echo 'usage: ./run_experiment_synthetic.sh REPS MIN_MS MAX_MS STEP'
     exit 1
 fi
 
-t=$1
-while [ $t -le $2 ]; do
+make -f Makefile
+
+t=$2
+while [ $t -le $3 ]; do
     echo $t 
     # run synthetic workload 
-    run_synthetic.sh $4 $t
+    run_single_synthetic.sh $1 $t
     # collect data
     for outfile in "$OUTDIR"/* 
     do 
         if [ -s "$outfile" ]; then 
-            cp "$OUTDIR/$outfile" "$RESULTDIR/synthetic_${4}reps_${t}ms.json"
+            cp "$OUTDIR/$outfile" "$RESULTDIR/synthetic_${1}reps_${t}ms.json"
         fi
     done
 
-    t=$(($t+$3))
+    t=$(($t+$4))
 done
