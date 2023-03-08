@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-ROOTDIR="~/faasten"
-OUTDIR="~/faasten/out"
-RESULTDIR="~/faasten/experiments/synthetic/single"
+ROOTDIR="/home/atli/faasten"
+OUTDIR="$ROOTDIR/out"
+RESULTDIR="$ROOTDIR/experiments/synthetic/single"
 
 if [ $# -ne 4 ]; then
     echo 'usage: ./run_experiment_synthetic.sh REPS MIN_MS MAX_MS STEP'

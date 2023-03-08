@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-ROOTDIR="~/faasten"
+ROOTDIR="/home/atli/faasten"
 
 if [ $# -ne 2 ]; then
     echo 'usage: ./run_synthetic.sh REPS INTEROP_COMPUTE_MS'

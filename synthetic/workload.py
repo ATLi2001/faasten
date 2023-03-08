@@ -21,7 +21,7 @@ def app_handle(args, context, syscall):
     interop_compute_ms = args["interop_compute_ms"]
 
     for i in range(reps):
-        syscall.write_key(bytes(i, "utf-8"), bytes(str(random.random()), "utf-8"))
+        syscall.write_key(bytes(str(i), "utf-8"), bytes(str(random.random()), "utf-8"))
         time.sleep(interop_compute_ms / 1000)
     
     return args
