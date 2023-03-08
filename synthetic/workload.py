@@ -24,4 +24,6 @@ def app_handle(args, context, syscall):
         syscall.write_key(bytes(str(i), "utf-8"), bytes(str(random.random()), "utf-8"))
         time.sleep(interop_compute_ms / 1000)
     
+    syscall.write_key(bytes("EXTERNALIZE", "utf-8"), bytes("EXTERNALIZE", "utf-8"))
+
     return args

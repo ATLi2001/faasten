@@ -10,6 +10,8 @@ fi
 # synthetic_workload.json file
 echo "{\"args\": {\"reps\": $1, \"interop_compute_ms\": $2}, \"workflow\": [ ], \"context\": { }}" > synthetic_workload.json
 
+cd $ROOTDIR
+
 # run multivm in background
 sudo RUST_LOG=debug $ROOTDIR/target/debug/multivm --config $ROOTDIR/synthetic/synthetic.yaml --mem 1024 --listen 127.0.0.1:3456 &
 PID=$!
