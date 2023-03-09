@@ -14,9 +14,7 @@ cd $ROOTDIR
 
 # run multivm in background
 sudo RUST_LOG=debug $ROOTDIR/target/debug/multivm --config $ROOTDIR/synthetic/synthetic.yaml --mem 1024 --listen 127.0.0.1:3456 &
-PID=$!
 
-echo $PID
 # sleep so multivm can have time to start listen
 sleep 1
 
@@ -24,4 +22,4 @@ sleep 1
 sudo RUST_LOG=debug $ROOTDIR/target/debug/sfclient -s 127.0.0.1:3456 -f synthetic < $ROOTDIR/synthetic/synthetic_workload.json
 
 # send ^C to multivm
-sudo kill -INT $PID
+sudo kill -INT $(pidof multivm)
