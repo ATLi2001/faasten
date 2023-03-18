@@ -14,6 +14,9 @@ make -f Makefile
 # clear OUTDIR
 sudo rm -f $OUTDIR/*
 
+# make RESULTDIR
+mkdir -p $RESULTDIR/$1
+
 # for each time from MIN_MS to MAX_MS, incrementing by STEP each time
 t=$3
 while [ $t -le $4 ]; do
