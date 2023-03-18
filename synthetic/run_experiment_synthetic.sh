@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-ROOTDIR="/home/atli/faasten"
+ROOTDIR="$HOME/faasten"
 OUTDIR="$ROOTDIR/out"
 RESULTDIR="$ROOTDIR/experiments/synthetic/single"
 
