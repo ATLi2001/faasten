@@ -24,7 +24,7 @@ mkdir -p $RESULTDIR/$1
 cd $ROOTDIR
 
 # run multivm in background
-sudo $ROOTDIR/target/debug/multivm --config $ROOTDIR/resources/graderbot-config.yaml --mem 1024 --listen 127.0.0.1:3456 &
+sudo $ROOTDIR/target/debug/multivm --config $ROOTDIR/resources/graderbot_config.yaml --mem 1024 --listen 127.0.0.1:3456 &
 
 # sleep so multivm can have time to start listen
 sleep 1
