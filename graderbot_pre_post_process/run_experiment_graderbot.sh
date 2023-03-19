@@ -46,6 +46,6 @@ do
     # only copy over non empty files
     if [ -s "$outfile" ]; then 
         cp $outfile "$RESULTDIR/${1}/go_grader_grades_generate_report_${i}.json"
-        i=$i+1
+	i=$((i+1))
     fi
 done

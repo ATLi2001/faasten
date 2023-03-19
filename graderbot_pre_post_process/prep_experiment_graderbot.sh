@@ -18,4 +18,4 @@ blobstore_val=${blobstore_val:1}
 echo $blobstore_val
 
 graderbot_workload_json="{\"args\": {\"submission\": \"$blobstore_val\"}, \"workflow\": [ \"go_grader\", \"grades\", \"generate_report\", \"graderbot_post_process\" ], \"context\": { \"repository\": \"cos316/example/\", \"commit\": \"b541c851d79edad1d05fc64c1bcca88800703a30\", \"push_date\": 1642798607, \"metadata\": {\"assignment\": \"example\"}}}"
-echo $graderbot_workload_json > "./graderbot_pre_process/graderbot_workload.json"
+echo $graderbot_workload_json > "$ROOTDIR/graderbot_pre_post_process/graderbot_pre_process/graderbot_workload.json"
