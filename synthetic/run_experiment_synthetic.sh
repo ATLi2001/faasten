@@ -14,7 +14,7 @@ if [ $# -ne 5 ]; then
 fi
 
 # need to have EXPERIMENT_NAME correct
-if [ $2 != "reps" && $2 != "interop"]; then 
+if [[ $2 != "reps" && $2 != "interop" ]]; then 
     echo "EXPERIMENT_NAME incorrect"
     exit 1
 fi
@@ -30,6 +30,9 @@ mkdir -p $RESULTDIR/$1/$2
 # trials loop
 for (( i=0; i<$TRIALS; i++))
 do 
+	
+    echo "trial $i"
+
     # for each time from MIN to MAX, incrementing by STEP each time
     x=$3
     while [ $x -le $4 ]; do
@@ -47,12 +50,14 @@ do
             FILENAME="synthetic_${REPS}reps_interop${x}ms_globaldb${GLOBAL_DB_DELAY_MS}ms_trial${i}.json"
         fi
 
+	echo $FILENAME
+
         # collect data
         for outfile in "$OUTDIR"/* 
         do
-        # only copy over non empty files
+            # only copy over non empty files
             if [ -s "$outfile" ]; then 
-                cp $outfile "$RESULTDIR/${1}/$FILENAME"
+                cp $outfile "$RESULTDIR/${1}/${2}/$FILENAME"
             fi
         done
 
