@@ -50,7 +50,7 @@ do
             FILENAME="synthetic_${REPS}reps_interop${x}ms_globaldb${GLOBAL_DB_DELAY_MS}ms_trial${i}.json"
         fi
 
-	echo $FILENAME
+        echo $FILENAME
 
         # collect data
         for outfile in "$OUTDIR"/* 
