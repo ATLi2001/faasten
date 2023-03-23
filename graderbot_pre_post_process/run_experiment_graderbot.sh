@@ -4,6 +4,7 @@ ROOTDIR="$HOME/faasten"
 GRADERBOTDIR="$HOME/graderbot-functions"
 OUTDIR="$ROOTDIR/out"
 RESULTDIR="$ROOTDIR/experiments/graderbot"
+TRIALS=50
 
 if [ $# -ne 1 ]; then
     echo 'usage: ./run_experiment_graderbot.sh NAME'
@@ -34,7 +35,28 @@ sudo $ROOTDIR/target/debug/sfclient -s 127.0.0.1:3456 -f graderbot_pre_process <
 
 # because sfclient returns upon the first function completion
 # sleep to allow rest of functions to run
-sleep 60
+sleep 20
+
+# clear OUTDIR
+sudo rm -f $OUTDIR/*
+
+# trials loop for now warmed up system
+for (( i=0; i<$TRIALS; i++))
+do 
+    echo "trial $i"
+
+    # warmed up system can start from go_grader directly, no need for the pre process
+    # make sure context has trial number in it
+    graderbot_workload_json="{\"args\": {\"submission\": \"$blobstore_val\"}, \"workflow\": [ \"grades\", \"generate_report\", \"graderbot_post_process\" ], \"context\": { \"repository\": \"cos316/example/\", \"commit\": \"b541c851d79edad1d05fc64c1bcca88800703a30\", \"push_date\": 1642798607, \"metadata\": {\"assignment\": \"example\", \"trial\": $i}}}"
+    echo $graderbot_workload_json > "$ROOTDIR/graderbot_pre_post_process/graderbot_warm_workload.json"
+
+    # run sfclient starting at go_grader
+    sudo $ROOTDIR/target/debug/sfclient -s 127.0.0.1:3456 -f go_grader < $ROOTDIR/graderbot_pre_post_process/graderbot_warm_workload.json
+
+    # because sfclient returns upon the first function completion
+    # sleep to allow rest of functions to run
+    sleep 20
+done
 
 # send ^C to multivm
 sudo kill -INT $(pidof multivm)
