@@ -24,6 +24,11 @@ mkdir -p $RESULTDIR/$1
 
 cd $ROOTDIR
 
+# Determine the blob store value (ignore the @ symbol)
+# this should go into the graderbot workload as args["submission"]
+blobstore_val=$(sudo $ROOTDIR/target/debug/sfdb "github/cos316/example/submission.tgz" | xargs)
+blobstore_val=${blobstore_val:1}
+
 # run multivm in background
 sudo $ROOTDIR/target/debug/multivm --config $ROOTDIR/resources/graderbot_config.yaml --mem 1024 --listen 127.0.0.1:3456 &
 
