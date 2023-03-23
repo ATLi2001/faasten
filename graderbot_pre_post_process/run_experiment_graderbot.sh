@@ -42,9 +42,6 @@ sudo $ROOTDIR/target/debug/sfclient -s 127.0.0.1:3456 -f graderbot_pre_process <
 # sleep to allow rest of functions to run
 sleep 20
 
-# clear OUTDIR
-sudo rm -f $OUTDIR/*
-
 # trials loop for now warmed up system
 for (( i=0; i<$TRIALS; i++))
 do 
