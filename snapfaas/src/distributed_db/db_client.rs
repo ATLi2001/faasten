@@ -1,8 +1,9 @@
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex};
-use log::debug;
+use log::{debug, error};
 use lmdb::WriteFlags;
+use tikv_client::TransactionClient;
 
 use crate::syscalls;
 use syscalls::syscall::Syscall as SC;
@@ -50,7 +51,8 @@ struct SyscallChannel {
 pub struct DbClient {
     // address: String,
     cache: r2d2::Pool<DbServerManager>,
-    conn: r2d2::Pool<DbServerManager>,
+    // conn: r2d2::Pool<DbServerManager>,
+    globaldb_client: TransactionClient, 
     tx: Arc<Mutex<Sender<SyscallChannel>>>,
     rx: Arc<Mutex<Receiver<SyscallChannel>>>,
 }
@@ -183,12 +185,13 @@ impl DbClient {
     pub fn new(address: String) -> Self {
         debug!("db_client created, server at {}", address.clone());
         let cache = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: CACHE_ADDRESS.to_string() }).expect("cache pool");
-        let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
+        // let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
+        let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"]).await?;
         let (tx, rx) = channel();
 
         DbClient {
             cache, 
-            conn, 
+            globaldb_client, 
             tx: Arc::new(Mutex::new(tx)), 
             rx: Arc::new(Mutex::new(rx)), 
         }
@@ -210,8 +213,38 @@ impl DbClient {
             let sc_chan = self.rx.lock().unwrap().recv().unwrap();
             let sc = sc_chan.syscall;
 
-            let conn = &mut self.conn.get().unwrap();
-            let _ = send_sc_get_response(sc, conn);
+            match sc {
+                SC::WriteKey(wk) => {
+                    let mut flags = WriteFlags::empty();
+                    if let Some(f) = wk.flags {
+                        flags = WriteFlags::from_bits(f).expect("bad flags");
+                    }
+
+                    let mut txn = self.globaldb_client.begin_optimistic().await?;
+                    if flags == WriteFlags::NO_OVERWRITE {
+                        let key_exist = txn.key_exists(wk.key.to_owned()).await?;
+                        if !key_exist {
+                            txn.put(wk.key.to_owned(), wk.value.to_owned()).await?;
+                        }
+                    } 
+                    else {
+                        txn.put(wk.key.to_owned(), wk.value.to_owned()).await?;
+                    }  
+                    txn.commit().await?;
+                },
+                SC::CompareAndSwap(cas) => {
+                    let mut txn = self.globaldb_client.begin_optimistic().await?;
+                    let old = txn.get(cas.key.to_owned()).await?;
+                    if cas.expected == old {
+                        txn.put(cas.key.to_owned(), cas.value.to_owned()).await?;
+                    }
+                    txn.commit().await?;
+                },
+                _ => error!("unexpected syscall in db_client global_db_client {:?}", sc),
+            };
+
+            // let conn = &mut self.conn.get().unwrap();
+            // let _ = send_sc_get_response(sc, conn);
 
             if sc_chan.send_chan.is_some() {
                 let ext_send = sc_chan.send_chan.unwrap();
