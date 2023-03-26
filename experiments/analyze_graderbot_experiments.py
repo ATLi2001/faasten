@@ -11,7 +11,7 @@ def analyze_dir(dir_path):
         print(file_path)
         with open(os.path.join(dir_path, file_path), "r") as f:
             for j in f.readlines():
-                curr_json = json.load(j.strip())
+                curr_json = json.loads(j.strip())
                 # if no trial then was the warmup
                 if "trial" not in curr_json["request"]["payload"]["context"]["metadata"]:
                     continue
@@ -32,18 +32,18 @@ ext_sync = analyze_dir(os.path.join(os.curdir, "graderbot", "ext_sync"))
 baseline.sort_values(by=["trial", "remaining_workflow_len"], ascending=[True, False], inplace=True)
 ext_sync.sort_values(by=["trial", "remaining_workflow_len"], ascending=[True, False], inplace=True)
 
-print(baseline)
-print(ext_sync)
-
 # get function completition times relative to first launch time
-baseline_y = baseline["completed"].to_numpy() - baseline["launched"].to_numpy()[0]
-ext_sync_y = ext_sync["completed"].to_numpy() - ext_sync["launched"].to_numpy()[0]
+baseline["net_completed"] = baseline["completed"].sub(baseline.groupby("trial")["launched"].transform("first"))
+ext_sync["net_completed"] = ext_sync["completed"].sub(ext_sync.groupby("trial")["launched"].transform("first"))
 
-plt.scatter(np.arange(len(baseline_y)), baseline_y / 10**6, label="baseline")
-plt.scatter(np.arange(len(ext_sync_y)), ext_sync_y / 10**6, label="ext_sync")
+baseline_function_means = baseline.groupby("function")["net_completed"].mean().sort_values()
+ext_sync_function_means = ext_sync.groupby("function")["net_completed"].mean().sort_values()
+
+plt.scatter(np.arange(len(baseline_function_means)), baseline_function_means / 10**6, label="baseline")
+plt.scatter(np.arange(len(ext_sync_function_means)), ext_sync_function_means / 10**6, label="ext_sync")
 plt.title("External Synchrony vs Baseline on Graderbot Functions")
 plt.ylabel("Function Completition Time (ms)")
 plt.xlabel("Function")
-plt.xticks(np.arange(len(baseline_y)), baseline["function"], fontsize=6)
+plt.xticks(np.arange(len(baseline_function_means)), baseline_function_means.index, fontsize=6)
 plt.legend()
 plt.show()
