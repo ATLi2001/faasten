@@ -6,26 +6,31 @@ import matplotlib.pyplot as plt
 
 # analyze the experiment results in given directory
 def analyze_dir(dir_path):
-    results = pd.DataFrame(columns=["function", "launched", "completed", "remaining_workflow_len"])
+    results = pd.DataFrame(columns=["function", "launched", "completed", "remaining_workflow_len", "trial"])
     for file_path in os.listdir(dir_path):
         print(file_path)
         with open(os.path.join(dir_path, file_path), "r") as f:
-            curr_json = json.load(f)
-            results.loc[len(results)] = [
-                curr_json["request"]["function"], 
-                curr_json["launched"],
-                curr_json["completed"],
-                len(curr_json["request"]["payload"]["workflow"]), 
-            ]
+            for j in f.readlines():
+                curr_json = json.load(j.strip())
+                # if no trial then was the warmup
+                if "trial" not in curr_json["request"]["payload"]["context"]["metadata"]:
+                    continue
+                results.loc[len(results)] = [
+                    curr_json["request"]["function"], 
+                    curr_json["launched"],
+                    curr_json["completed"],
+                    len(curr_json["request"]["payload"]["workflow"]), 
+                    curr_json["request"]["payload"]["context"]["metadata"]["trial"],
+                ]
 
     return results
 
 baseline = analyze_dir(os.path.join(os.curdir, "graderbot", "baseline"))
 ext_sync = analyze_dir(os.path.join(os.curdir, "graderbot", "ext_sync"))
 
-# sort by remaining_workflow_len descending
-baseline.sort_values(by="remaining_workflow_len", ascending=False, inplace=True)
-ext_sync.sort_values(by="remaining_workflow_len", ascending=False, inplace=True)
+# sort by trial then remaining_workflow_len descending
+baseline.sort_values(by=["trial", "remaining_workflow_len"], ascending=[True, False], inplace=True)
+ext_sync.sort_values(by=["trial", "remaining_workflow_len"], ascending=[True, False], inplace=True)
 
 print(baseline)
 print(ext_sync)
