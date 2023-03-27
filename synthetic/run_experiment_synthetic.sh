@@ -14,7 +14,7 @@ if [ $# -ne 5 ]; then
 fi
 
 # need to have EXPERIMENT_NAME correct
-if [[ $2 != "reps" && $2 != "interop" ]]; then 
+if [[ $2 != "reps" && $2 != "interop" && $2 != "globaldb" ]]; then 
     echo "EXPERIMENT_NAME incorrect"
     exit 1
 fi
@@ -41,6 +41,7 @@ do
         # run synthetic workload 
         # if EXPERIMENT_NAME is reps, then we are varying reps and keeping interop constant
         # if EXPERIMENT_NAME is interop, then we are varying interop and keeping reps constant
+        # if EXPERIMENT_NAME is globaldb, we cannot vary globaldb here
         FILENAME="temp.json"
         if [ $2 = "reps" ]; then
             bash run_single_synthetic.sh $x $INTEROP_COMPUTE_MS
