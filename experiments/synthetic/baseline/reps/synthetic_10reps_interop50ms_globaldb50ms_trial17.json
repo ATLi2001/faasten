@@ -1,0 +1,1 @@
+{"at_gateway":15672523245972,"at_vmm":0,"arrived":15672523495057,"allocated":15672561648699,"launched":15673556368445,"completed":15677080897342,"request":{"function":"synthetic","payload":{"args":{"interop_compute_ms":50,"reps":10},"context":{},"workflow":[]}}}
