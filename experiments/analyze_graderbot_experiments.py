@@ -37,10 +37,14 @@ baseline["net_completed"] = baseline["completed"].sub(baseline.groupby("trial")[
 ext_sync["net_completed"] = ext_sync["completed"].sub(ext_sync.groupby("trial")["launched"].transform("first"))
 
 baseline_function_means = baseline.groupby("function")["net_completed"].mean().sort_values()
+baseline_function_std = baseline.groupby("function")["net_completed"].std().reindex(baseline_function_means.index)
 ext_sync_function_means = ext_sync.groupby("function")["net_completed"].mean().sort_values()
+ext_sync_function_std = ext_sync.groupby("function")["net_completed"].std().reindex(ext_sync_function_means.index)
 
 plt.scatter(np.arange(len(baseline_function_means)), baseline_function_means / 10**6, label="baseline")
+plt.errorbar(np.arange(len(baseline_function_means)), baseline_function_means / 10**6, yerr=baseline_function_std / 10**6, fmt="o")
 plt.scatter(np.arange(len(ext_sync_function_means)), ext_sync_function_means / 10**6, label="ext_sync")
+plt.errorbar(np.arange(len(ext_sync_function_means)), ext_sync_function_means / 10**6, yerr=ext_sync_function_std / 10**6, fmt="o")
 plt.title("External Synchrony vs Baseline on Graderbot Functions")
 plt.ylabel("Function Completition Time (ms)")
 plt.xlabel("Function")
