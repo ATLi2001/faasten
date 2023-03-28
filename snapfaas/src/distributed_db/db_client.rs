@@ -71,14 +71,18 @@ impl DbService for DbClient {
 
         let cache_conn = &mut self.cache.get().unwrap();
         let resp = send_sc_get_response(sc.clone(), cache_conn);
-        // special value of EXTERNALIZE is not put in db
-        if key_clone == "EXTERNALIZE".as_bytes() {
-            debug!("externalization happening");
-            self.send_to_background_thread(sc, true);
-        }
-        else {
-            self.send_to_background_thread(sc, false);
-        }
+
+        let conn = &mut self.conn.get().unwrap();
+        let _ = send_sc_get_response(sc.clone(), conn);
+
+        // // special value of EXTERNALIZE is not put in db
+        // if key_clone == "EXTERNALIZE".as_bytes() {
+        //     debug!("externalization happening");
+        //     self.send_to_background_thread(sc, true);
+        // }
+        // else {
+        //     self.send_to_background_thread(sc, false);
+        // }
         resp        
     }
 
@@ -124,15 +128,20 @@ impl BackingStore for DbClient {
             value: Vec::from(value),
             flags: None,
         });
-        // special value of EXTERNALIZE is not put in db
-        if value == "EXTERNALIZE".as_bytes() {
-            self.send_to_background_thread(sc, true);
-        }
-        else {
-            let cache_conn = &mut self.cache.get().unwrap();
-            let _ = send_sc_get_response(sc.clone(), cache_conn);
-            self.send_to_background_thread(sc, false);
-        }
+        let cache_conn = &mut self.cache.get().unwrap();
+        let _ = send_sc_get_response(sc.clone(), cache_conn);
+
+        let conn = &mut self.conn.get().unwrap();
+        let _ = send_sc_get_response(sc.clone(), conn);
+        // // special value of EXTERNALIZE is not put in db
+        // if value == "EXTERNALIZE".as_bytes() {
+        //     self.send_to_background_thread(sc, true);
+        // }
+        // else {
+        //     let cache_conn = &mut self.cache.get().unwrap();
+        //     let _ = send_sc_get_response(sc.clone(), cache_conn);
+        //     self.send_to_background_thread(sc, false);
+        // }
     }
 
     fn add(&self, key: &[u8], value: &[u8]) -> bool {
