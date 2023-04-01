@@ -220,25 +220,25 @@ impl DbClient {
                         flags = WriteFlags::from_bits(f).expect("bad flags");
                     }
 
-                    let mut txn = self.globaldb_client.begin_optimistic().await?;
+                    let mut txn = self.globaldb_client.begin_optimistic().await.unwrap();
                     if flags == WriteFlags::NO_OVERWRITE {
-                        let key_exist = txn.key_exists(wk.key.to_owned()).await?;
+                        let key_exist = txn.key_exists(wk.key.to_owned()).await.unwrap();
                         if !key_exist {
-                            txn.put(wk.key.to_owned(), wk.value.to_owned()).await?;
+                            txn.put(wk.key.to_owned(), wk.value.to_owned()).await.unwrap();
                         }
                     } 
                     else {
-                        txn.put(wk.key.to_owned(), wk.value.to_owned()).await?;
+                        txn.put(wk.key.to_owned(), wk.value.to_owned()).await.unwrap();
                     }  
-                    txn.commit().await?;
+                    txn.commit().await.unwrap();
                 },
                 SC::CompareAndSwap(cas) => {
-                    let mut txn = self.globaldb_client.begin_optimistic().await?;
-                    let old = txn.get(cas.key.to_owned()).await?;
+                    let mut txn = self.globaldb_client.begin_optimistic().await.unwrap();
+                    let old = txn.get(cas.key.to_owned()).await.unwrap();
                     if cas.expected == old {
-                        txn.put(cas.key.to_owned(), cas.value.to_owned()).await?;
+                        txn.put(cas.key.to_owned(), cas.value.to_owned()).await.unwrap();
                     }
-                    txn.commit().await?;
+                    txn.commit().await.unwrap();
                 },
                 _ => error!("unexpected syscall in db_client global_db_client {:?}", sc),
             };
