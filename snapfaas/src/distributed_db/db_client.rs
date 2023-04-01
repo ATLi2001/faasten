@@ -47,12 +47,11 @@ struct SyscallChannel {
     send_chan: Option<Sender<bool>>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct DbClient {
     // address: String,
     cache: r2d2::Pool<DbServerManager>,
     // conn: r2d2::Pool<DbServerManager>,
-    globaldb_client: TransactionClient, 
     tx: Arc<Mutex<Sender<SyscallChannel>>>,
     rx: Arc<Mutex<Receiver<SyscallChannel>>>,
 }
@@ -182,16 +181,14 @@ impl BackingStore for DbClient {
 }
 
 impl DbClient {
-    pub async fn new(address: String) -> Self {
+    pub fn new(address: String) -> Self {
         debug!("db_client created, server at {}", address.clone());
         let cache = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: CACHE_ADDRESS.to_string() }).expect("cache pool");
         // let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
-        let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"], None).await.unwrap();
         let (tx, rx) = channel();
 
         DbClient {
             cache, 
-            globaldb_client, 
             tx: Arc::new(Mutex::new(tx)), 
             rx: Arc::new(Mutex::new(rx)), 
         }
@@ -206,6 +203,7 @@ impl DbClient {
     }
 
     pub async fn channel_listen(&self) {
+        let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"], None).await.unwrap();
         let mut i = 0;
         loop {
             debug!("background thread count = {}", i);
@@ -220,7 +218,7 @@ impl DbClient {
                         flags = WriteFlags::from_bits(f).expect("bad flags");
                     }
 
-                    let mut txn = self.globaldb_client.begin_optimistic().await.unwrap();
+                    let mut txn = globaldb_client.begin_optimistic().await.unwrap();
                     if flags == WriteFlags::NO_OVERWRITE {
                         let key_exist = txn.key_exists(wk.key.to_owned()).await.unwrap();
                         if !key_exist {
@@ -233,7 +231,7 @@ impl DbClient {
                     txn.commit().await.unwrap();
                 },
                 SC::CompareAndSwap(cas) => {
-                    let mut txn = self.globaldb_client.begin_optimistic().await.unwrap();
+                    let mut txn = globaldb_client.begin_optimistic().await.unwrap();
                     let old = txn.get(cas.key.to_owned()).await.unwrap();
                     if cas.expected == old {
                         txn.put(cas.key.to_owned(), cas.value.to_owned()).await.unwrap();
