@@ -198,8 +198,15 @@ impl DbClient {
     pub fn start_dbclient(self) {
         let arc_self = Arc::new(self);
         let arc_self_clone = arc_self.clone();
-        tokio::spawn(async move {
-            arc_self_clone.channel_listen().await;
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                            .worker_threads(1)
+                            .enable_all()
+                            .build()
+                            .unwrap();
+            rt.block_on(async move {
+                arc_self_clone.channel_listen().await;
+            });
         });
     }
 
