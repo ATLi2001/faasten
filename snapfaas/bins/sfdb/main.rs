@@ -62,7 +62,7 @@ fn main() {
         let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"], None).await.unwrap();
         for i in 0..10 {
             let mut txn = globaldb_client.begin_optimistic().await.unwrap();
-            let value = txn.get(Vec::from(str(i))).await.unwrap();
+            let value = txn.get(Vec::from(i.to_string())).await.unwrap();
             txn.commit().await.unwrap();
 
             println!("key {}, value {}", i, String::from_utf8_lossy(&value.unwrap()));
