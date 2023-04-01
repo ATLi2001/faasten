@@ -47,7 +47,7 @@ struct SyscallChannel {
     send_chan: Option<Sender<bool>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DbClient {
     // address: String,
     cache: r2d2::Pool<DbServerManager>,
@@ -102,7 +102,7 @@ impl DbService for DbClient {
     
     fn scan(&self, dir: Vec<u8>) -> Result<Vec<u8>, Error> {
         let sc = SC::ReadDir(syscalls::ReadDir {dir});
-        let conn = &mut self.conn.get().map_err(|_| Error::TcpConnectionError)?;
+        let conn = &mut self.cache.get().map_err(|_| Error::TcpConnectionError)?;
         send_sc_get_response(sc, conn)
     }
 }
@@ -182,11 +182,11 @@ impl BackingStore for DbClient {
 }
 
 impl DbClient {
-    pub fn new(address: String) -> Self {
+    pub async fn new(address: String) -> Self {
         debug!("db_client created, server at {}", address.clone());
         let cache = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: CACHE_ADDRESS.to_string() }).expect("cache pool");
         // let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
-        let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"]).await?;
+        let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"], None).await.unwrap();
         let (tx, rx) = channel();
 
         DbClient {
@@ -205,7 +205,7 @@ impl DbClient {
         });
     }
 
-    pub fn channel_listen(&self) {
+    pub async fn channel_listen(&self) {
         let mut i = 0;
         loop {
             debug!("background thread count = {}", i);
