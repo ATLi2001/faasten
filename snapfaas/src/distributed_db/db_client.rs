@@ -1,6 +1,7 @@
 use std::net::TcpStream;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex};
+use tokio;
 use log::{debug, error};
 use lmdb::WriteFlags;
 use tikv_client::TransactionClient;
@@ -59,14 +60,14 @@ pub struct DbClient {
 // legacy for read key, write key, read dir, cas basic operations
 impl DbService for DbClient {
     fn get(&self, key: Vec<u8>) -> Result<Vec<u8>, Error> {
-        debug!("DbService get");
+        println!("DbService get");
         let sc = SC::ReadKey(syscalls::ReadKey {key});
         let cache_conn = &mut self.cache.get().unwrap();
         send_sc_get_response(sc, cache_conn)
     }
 
     fn put(&self, key: Vec<u8>, value: Vec<u8>) -> Result<Vec<u8>, Error> {
-        debug!("DbService put");
+        println!("DbService put");
         let key_clone = key.clone();
         let sc = SC::WriteKey(syscalls::WriteKey {key, value, flags: None});
 
@@ -74,7 +75,7 @@ impl DbService for DbClient {
         let resp = send_sc_get_response(sc.clone(), cache_conn);
         // special value of EXTERNALIZE is not put in db
         if key_clone == "EXTERNALIZE".as_bytes() {
-            debug!("externalization happening");
+            println!("externalization happening");
             self.send_to_background_thread(sc, true);
         }
         else {
@@ -182,7 +183,7 @@ impl BackingStore for DbClient {
 
 impl DbClient {
     pub fn new(address: String) -> Self {
-        debug!("db_client created, server at {}", address.clone());
+        println!("db_client created, server at {}", address.clone());
         let cache = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: CACHE_ADDRESS.to_string() }).expect("cache pool");
         // let conn = r2d2::Pool::builder().max_size(10).build(DbServerManager { address: address.clone() }).expect("pool");
         let (tx, rx) = channel();
@@ -197,8 +198,8 @@ impl DbClient {
     pub fn start_dbclient(self) {
         let arc_self = Arc::new(self);
         let arc_self_clone = arc_self.clone();
-        std::thread::spawn(move || {
-            arc_self_clone.channel_listen();
+        tokio::spawn(async move {
+            arc_self_clone.channel_listen().await;
         });
     }
 
@@ -206,7 +207,7 @@ impl DbClient {
         let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"], None).await.unwrap();
         let mut i = 0;
         loop {
-            debug!("background thread count = {}", i);
+            println!("background thread count = {}", i);
             i += 1;
             let sc_chan = self.rx.lock().unwrap().recv().unwrap();
             let sc = sc_chan.syscall;
@@ -253,7 +254,7 @@ impl DbClient {
 
     fn send_to_background_thread(&self, sc: SC, synchronous: bool) {
         if synchronous {
-            debug!("send to background thread sync");
+            println!("send to background thread sync");
             let (ext_send, ext_recv) = channel();
             self.tx.lock().unwrap().send(
                 SyscallChannel{syscall: sc, send_chan: Some(ext_send)}
@@ -262,7 +263,7 @@ impl DbClient {
             let _ = ext_recv.recv().unwrap();
         }
         else {
-            debug!("send to background thread async");
+            println!("send to background thread async");
             self.tx.lock().unwrap().send(
                 SyscallChannel{syscall: sc, send_chan: None}
             ).unwrap();
@@ -274,7 +275,7 @@ impl DbClient {
 fn send_sc_get_response(sc: SC, stream: &mut TcpStream) -> Result<Vec<u8>, Error>  {
     use std::io::{Read, Write};
 
-    debug!("send sc, local: {}, peer: {}", stream.local_addr().unwrap(), stream.peer_addr().unwrap());
+    println!("send sc, local: {}, peer: {}", stream.local_addr().unwrap(), stream.peer_addr().unwrap());
 
     let mut buf = Vec::new();
     buf.reserve(sc.encoded_len());
