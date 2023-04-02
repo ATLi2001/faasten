@@ -27,6 +27,10 @@ sudo rm -f $OUTDIR/*
 # make RESULTDIR
 mkdir -p $RESULTDIR/$1/$2
 
+# tikv
+tiup playground --mode tikv-slim &
+sleep 5
+
 # trials loop
 for (( i=0; i<$TRIALS; i++))
 do 
