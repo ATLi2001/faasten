@@ -14,7 +14,7 @@ if [ $# -ne 5 ]; then
 fi
 
 # need to have EXPERIMENT_NAME correct
-if [[ $2 != "reps" && $2 != "interop" && $2 != "globaldb" ]]; then 
+if [[ $2 != "reps" && $2 != "interop" && $2 != "globaldb" && $2 != "tikv_reps" && $2 != "tikv_interop" ]]; then 
     echo "EXPERIMENT_NAME incorrect"
     exit 1
 fi
@@ -28,8 +28,10 @@ sudo rm -f $OUTDIR/*
 mkdir -p $RESULTDIR/$1/$2
 
 # tikv
-tiup playground --mode tikv-slim &
-sleep 5
+if [[ $2 == "tikv_reps" || $2 == "tikv_interop" ]]; then
+    tiup playground --mode tikv-slim &
+    sleep 5
+fi
 
 # trials loop
 for (( i=0; i<$TRIALS; i++))
@@ -50,6 +52,12 @@ do
         if [ $2 = "reps" ]; then
             bash run_single_synthetic.sh $x $INTEROP_COMPUTE_MS
             FILENAME="synthetic_${x}reps_interop${INTEROP_COMPUTE_MS}ms_globaldb${GLOBAL_DB_DELAY_MS}ms_trial${i}.json"
+        elif [ $2 = "tikv_reps" ]; then 
+            bash run_single_synthetic.sh $x $INTEROP_COMPUTE_MS
+            FILENAME="synthetic_${x}reps_interop${INTEROP_COMPUTE_MS}ms_tikv_trial${i}.json"
+        elif [ $2 = "tikv_interop" ]; then 
+            bash run_single_synthetic.sh $REPS $x
+            FILENAME="synthetic_${REPS}reps_interop${x}ms_tikv_trial${i}.json"
         else
             bash run_single_synthetic.sh $REPS $x
             FILENAME="synthetic_${REPS}reps_interop${x}ms_globaldb${GLOBAL_DB_DELAY_MS}ms_trial${i}.json"
