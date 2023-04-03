@@ -4,6 +4,8 @@ pub mod db_client;
 pub const CACHE_ADDRESS: &str = "127.0.0.1:5000";
 // delay time of db server in ms
 pub const RESPONSE_DELAY_TIME: u64 = 50;
+// tikv server address
+pub const TIKV_ADDRESS: &str = "128.105.145.250:2379";
 
 #[derive(Debug)]
 pub enum Error {

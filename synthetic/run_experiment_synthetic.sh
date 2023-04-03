@@ -3,8 +3,8 @@
 ROOTDIR="$HOME/faasten"
 OUTDIR="$ROOTDIR/out"
 RESULTDIR="$ROOTDIR/experiments/synthetic"
-TRIALS=50
-REPS=100
+TRIALS=30
+REPS=50
 INTEROP_COMPUTE_MS=50
 GLOBAL_DB_DELAY_MS=50
 
@@ -27,14 +27,8 @@ sudo rm -f $OUTDIR/*
 # make RESULTDIR
 mkdir -p $RESULTDIR/$1/$2
 
-# tikv
-if [[ $2 == "tikv_reps" || $2 == "tikv_interop" ]]; then
-    tiup playground --mode tikv-slim &
-    sleep 5
-fi
-
 # trials loop
-for (( i=0; i<$TRIALS; i++))
+for (( i=0; i<$TRIALS; i++ ))
 do 
 	
     echo "trial $i"

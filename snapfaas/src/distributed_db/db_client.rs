@@ -8,7 +8,7 @@ use tikv_client::TransactionClient;
 
 use crate::syscalls;
 use syscalls::syscall::Syscall as SC;
-use crate::distributed_db::{DbService, Error, CACHE_ADDRESS};
+use crate::distributed_db::{DbService, Error, CACHE_ADDRESS, TIKV_ADDRESS};
 use crate::fs::BackingStore;
 use prost::Message;
 
@@ -211,7 +211,7 @@ impl DbClient {
     }
 
     pub async fn channel_listen(&self) {
-        let globaldb_client = TransactionClient::new(vec!["127.0.0.1:2379"], None).await.unwrap();
+        let globaldb_client = TransactionClient::new(vec![TIKV_ADDRESS.to_string()], None).await.unwrap();
         let mut i = 0;
         loop {
             debug!("background thread count = {}", i);
