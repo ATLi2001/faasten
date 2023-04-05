@@ -26,17 +26,17 @@ cd $ROOTDIR
 
 # Determine the blob store value (ignore the @ symbol)
 # this should go into the graderbot workload as args["submission"]
-blobstore_val=$(sudo $ROOTDIR/target/debug/sfdb "github/cos316/example/submission.tgz" | xargs)
+blobstore_val=$(sudo $ROOTDIR/target/release/sfdb "github/cos316/example/submission.tgz" | xargs)
 blobstore_val=${blobstore_val:1}
 
 # run multivm in background
-sudo $ROOTDIR/target/debug/multivm --config $ROOTDIR/resources/graderbot_config.yaml --mem 1024 --listen 127.0.0.1:3456 &
+sudo $ROOTDIR/target/release/multivm --config $ROOTDIR/resources/graderbot_config.yaml --mem 1024 --listen 127.0.0.1:3456 &
 
 # sleep so multivm can have time to start listen
 sleep 1
 
 # run sfclient
-sudo $ROOTDIR/target/debug/sfclient -s 127.0.0.1:3456 -f graderbot_pre_process < $ROOTDIR/graderbot_pre_post_process/graderbot_pre_process/graderbot_workload.json
+sudo $ROOTDIR/target/release/sfclient -s 127.0.0.1:3456 -f graderbot_pre_process < $ROOTDIR/graderbot_pre_post_process/graderbot_pre_process/graderbot_workload.json
 
 # because sfclient returns upon the first function completion
 # sleep to allow rest of functions to run
@@ -53,7 +53,7 @@ do
     echo $graderbot_workload_json > "$ROOTDIR/graderbot_pre_post_process/graderbot_warm_workload.json"
 
     # run sfclient starting at go_grader
-    sudo $ROOTDIR/target/debug/sfclient -s 127.0.0.1:3456 -f go_grader < $ROOTDIR/graderbot_pre_post_process/graderbot_warm_workload.json
+    sudo $ROOTDIR/target/release/sfclient -s 127.0.0.1:3456 -f go_grader < $ROOTDIR/graderbot_pre_post_process/graderbot_warm_workload.json
 
     # because sfclient returns upon the first function completion
     # sleep to allow rest of functions to run
