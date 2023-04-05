@@ -3,8 +3,8 @@
 ROOTDIR="$HOME/faasten"
 GRADERBOTDIR="$HOME/graderbot-functions"
 OUTDIR="$ROOTDIR/out"
-RESULTDIR="$ROOTDIR/experiments/graderbot"
-TRIALS=50
+RESULTDIR="$ROOTDIR/experiments/graderbot_tikv"
+TRIALS=30
 
 if [ $# -ne 1 ]; then
     echo 'usage: ./run_experiment_graderbot.sh NAME'
