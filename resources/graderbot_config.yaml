@@ -1,5 +1,5 @@
 allow_network: false
-firerunner_path: "./target/debug/firerunner"
+firerunner_path: "./target/release/firerunner"
 kernel_path: "./resources/images/vmlinux-4.20.0"
 runtimefs_dir: "./rootfs"
 appfs_dir: "../graderbot-functions/output"
