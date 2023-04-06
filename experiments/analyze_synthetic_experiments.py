@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # analyze the experiment results in given directory
 def analyze_dir(dir_path):
-    results = pd.DataFrame(columns=["reps", "interop_compute_ms", "globaldb_ms", "trial", "runtime_ns"])
+    results = pd.DataFrame(columns=["reps", "interop_compute_ms", "trial", "runtime_ns"])
     for file_path in os.listdir(dir_path):
         print(file_path)
         with open(os.path.join(dir_path, file_path), "r") as f:
@@ -15,12 +15,10 @@ def analyze_dir(dir_path):
             args = file_path.split("_")
             reps = int(args[1][:-4])
             interop_compute_ms = int(args[2][7:-2])
-            globaldb_ms = int(args[3][8:-2])
             trial = int(args[4][5:-5])
             results.loc[len(results)] = [
                 reps, 
                 interop_compute_ms, 
-                globaldb_ms,
                 trial,
                 curr_experiment["completed"] - curr_experiment["launched"]
             ]
@@ -32,7 +30,7 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
         index_order = ["reps", "interop_compute_ms", "trial"]
         groupby_order = ["reps", "interop_compute_ms"]
         label = "reps"
-        xlabel = "Inter Operation Delay (ms)"
+        xlabel = "Interoperation Delay (ms)"
 
     if name == "reps":
         index_order = ["interop_compute_ms", "reps", "trial"]
@@ -46,6 +44,23 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
         label = "globaldb ms"
         xlabel = "Global Db Delay (ms)"
 
+    def drop_outliers(df):
+        initial_len = len(df)
+        max_drop_per_group = 0
+        for index, df_group in df.groupby(groupby_order):
+            q_low = df_group["runtime_ns"].quantile(0.1)
+            q_high = df_group["runtime_ns"].quantile(0.9)
+            iqr = q_high-q_low
+            low_drop = df_group["runtime_ns"] < (q_low - 1.5*iqr) 
+            high_drop = df_group["runtime_ns"] > (q_high + 1.5*iqr)
+            if len(df_group[(low_drop | high_drop)]) > 0:
+                if len(df_group[(low_drop | high_drop)]) > max_drop_per_group:
+                    max_drop_per_group = len(df_group[(low_drop | high_drop)])
+                df.drop(df_group[(low_drop | high_drop)].index, inplace=True)
+        final_len = len(df)
+        print("Total dropped:", initial_len - final_len)
+        print("Max dropped per group:", max_drop_per_group)
+        return df
     
     # sort and set index
     df_ext_sync.sort_values(by=index_order, inplace=True)
@@ -56,6 +71,9 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
 
     df_ext_sync.set_index(index_order, inplace=True)
     df_baseline.set_index(index_order, inplace=True)
+
+    df_ext_sync = drop_outliers(df_ext_sync)
+    df_baseline = drop_outliers(df_baseline)
     
     common_index = df_ext_sync.index.intersection(df_baseline.index)
     df_ext_sync = df_ext_sync.loc[common_index]
@@ -104,29 +122,45 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
 
 
 synthetic_experiments = {
-    "synthetic_ext_sync_interop": {
-        "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "interop"),
-        "csv_path": "synthetic_ext_sync_interop.csv"
+    # "synthetic_ext_sync_interop": {
+    #     "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "interop"),
+    #     "csv_path": "synthetic_ext_sync_interop.csv"
+    # }, 
+    # "synthetic_baseline_interop": {
+    #     "results_path": os.path.join(os.curdir, "synthetic", "baseline", "interop"),
+    #     "csv_path": "synthetic_baseline_interop.csv"
+    # },
+    # "synthetic_ext_sync_reps": {
+    #     "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "reps"),
+    #     "csv_path": "synthetic_ext_sync_reps.csv"
+    # },
+    # "synthetic_baseline_reps": {
+    #     "results_path": os.path.join(os.curdir, "synthetic", "baseline", "reps"),
+    #     "csv_path": "synthetic_baseline_reps.csv"
+    # },
+    # "synthetic_ext_sync_globaldb": {
+    #     "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "globaldb"),
+    #     "csv_path": "synthetic_ext_sync_globaldb.csv"
+    # },
+    # "synthetic_baseline_globaldb": {
+    #     "results_path": os.path.join(os.curdir, "synthetic", "baseline", "globaldb"),
+    #     "csv_path": "synthetic_baseline_globaldb.csv"
+    # },
+    "synthetic_ext_sync_tikv_interop": {
+        "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "tikv_interop"),
+        "csv_path": "synthetic_ext_sync_tikv_interop.csv"
     }, 
-    "synthetic_baseline_interop": {
-        "results_path": os.path.join(os.curdir, "synthetic", "baseline", "interop"),
-        "csv_path": "synthetic_baseline_interop.csv"
+    "synthetic_baseline_tikv_interop": {
+        "results_path": os.path.join(os.curdir, "synthetic", "baseline", "tikv_interop"),
+        "csv_path": "synthetic_baseline_tikv_interop.csv"
     },
-    "synthetic_ext_sync_reps": {
-        "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "reps"),
-        "csv_path": "synthetic_ext_sync_reps.csv"
+    "synthetic_ext_sync_tikv_reps": {
+        "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "tikv_reps"),
+        "csv_path": "synthetic_ext_sync_tikv_reps.csv"
     },
-    "synthetic_baseline_reps": {
-        "results_path": os.path.join(os.curdir, "synthetic", "baseline", "reps"),
-        "csv_path": "synthetic_baseline_reps.csv"
-    },
-    "synthetic_ext_sync_globaldb": {
-        "results_path": os.path.join(os.curdir, "synthetic", "ext_sync", "globaldb"),
-        "csv_path": "synthetic_ext_sync_globaldb.csv"
-    },
-    "synthetic_baseline_globaldb": {
-        "results_path": os.path.join(os.curdir, "synthetic", "baseline", "globaldb"),
-        "csv_path": "synthetic_baseline_globaldb.csv"
+    "synthetic_baseline_tikv_reps": {
+        "results_path": os.path.join(os.curdir, "synthetic", "baseline", "tikv_reps"),
+        "csv_path": "synthetic_baseline_tikv_reps.csv"
     },
 }
 
@@ -139,18 +173,28 @@ for experiment in synthetic_experiments.keys():
         experiment_data["df"].to_csv(experiment_data["csv_path"])
     synthetic_experiments[experiment] = experiment_data
 
+# analyze_ext_sync_baseline(
+#     synthetic_experiments["synthetic_ext_sync_interop"]["df"], 
+#     synthetic_experiments["synthetic_baseline_interop"]["df"], 
+#     "interop"
+# )
+# analyze_ext_sync_baseline(
+#     synthetic_experiments["synthetic_ext_sync_reps"]["df"], 
+#     synthetic_experiments["synthetic_baseline_reps"]["df"], 
+#     "reps"
+# )
+# analyze_ext_sync_baseline(
+#     synthetic_experiments["synthetic_ext_sync_globaldb"]["df"], 
+#     synthetic_experiments["synthetic_baseline_globaldb"]["df"], 
+#     "globaldb"
+# )
 analyze_ext_sync_baseline(
-    synthetic_experiments["synthetic_ext_sync_interop"]["df"], 
-    synthetic_experiments["synthetic_baseline_interop"]["df"], 
+    synthetic_experiments["synthetic_ext_sync_tikv_interop"]["df"], 
+    synthetic_experiments["synthetic_baseline_tikv_interop"]["df"], 
     "interop"
 )
 analyze_ext_sync_baseline(
-    synthetic_experiments["synthetic_ext_sync_reps"]["df"], 
-    synthetic_experiments["synthetic_baseline_reps"]["df"], 
+    synthetic_experiments["synthetic_ext_sync_tikv_reps"]["df"], 
+    synthetic_experiments["synthetic_baseline_tikv_reps"]["df"], 
     "reps"
-)
-analyze_ext_sync_baseline(
-    synthetic_experiments["synthetic_ext_sync_globaldb"]["df"], 
-    synthetic_experiments["synthetic_baseline_globaldb"]["df"], 
-    "globaldb"
 )
