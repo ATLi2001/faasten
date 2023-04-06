@@ -25,8 +25,8 @@ def analyze_dir(dir_path):
 
     return results
 
-baseline = analyze_dir(os.path.join(os.curdir, "graderbot", "baseline"))
-ext_sync = analyze_dir(os.path.join(os.curdir, "graderbot", "ext_sync"))
+baseline = analyze_dir(os.path.join(os.curdir, "graderbot_tikv", "baseline"))
+ext_sync = analyze_dir(os.path.join(os.curdir, "graderbot_tikv", "ext_sync"))
 
 # sort by trial then remaining_workflow_len descending
 baseline.sort_values(by=["trial", "remaining_workflow_len"], ascending=[True, False], inplace=True)
@@ -40,6 +40,11 @@ baseline_function_means = baseline.groupby("function")["net_completed"].mean().s
 baseline_function_std = baseline.groupby("function")["net_completed"].std().reindex(baseline_function_means.index)
 ext_sync_function_means = ext_sync.groupby("function")["net_completed"].mean().sort_values()
 ext_sync_function_std = ext_sync.groupby("function")["net_completed"].std().reindex(ext_sync_function_means.index)
+
+baseline_function_means.to_csv("graderbot_tikv_baseline.csv")
+ext_sync_function_means.to_csv("graderbot_tikv_ext_sync.csv")
+pct_improve = (baseline_function_means["graderbot_post_process"] - ext_sync_function_means["graderbot_post_process"]) / baseline_function_means["graderbot_post_process"] * 100
+print("External Synchrony Percent Improvement:", pct_improve)
 
 plt.scatter(np.arange(len(baseline_function_means)), baseline_function_means / 10**6, label="baseline")
 plt.errorbar(np.arange(len(baseline_function_means)), baseline_function_means / 10**6, yerr=baseline_function_std / 10**6, fmt="o")
