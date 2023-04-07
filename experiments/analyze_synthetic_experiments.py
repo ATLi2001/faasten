@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({"text.usetex": True})
+plt.style.use("fivethirtyeight")
+
 # analyze the experiment results in given directory
 def analyze_dir(dir_path):
     results = pd.DataFrame(columns=["reps", "interop_compute_ms", "trial", "runtime_ns"])
@@ -88,6 +91,8 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
     print(df_pct_improve_mean)
     print(df_pct_improve_std)
 
+    plt.figure(figsize=(10,6))
+
     if len(groupby_order) > 1:
         for index_0_val in pd.unique(df_pct_improve_mean.index.get_level_values(0)):
             curr_df = df_pct_improve_mean[df_pct_improve_mean.index.get_level_values(0) == index_0_val]
@@ -117,7 +122,9 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
     plt.title("External Synchrony Improvement vs %s" % xlabel)
     plt.ylabel("Percent Improvment")
     plt.xlabel(xlabel)
-    plt.legend()
+    plt.legend(framealpha=0.5)
+    plt.tight_layout()
+    plt.savefig("synthetic_tikv_{}.png".format(name), format="png", dpi=600, transparent=True)
     plt.show()
 
 
@@ -188,11 +195,11 @@ for experiment in synthetic_experiments.keys():
 #     synthetic_experiments["synthetic_baseline_globaldb"]["df"], 
 #     "globaldb"
 # )
-analyze_ext_sync_baseline(
-    synthetic_experiments["synthetic_ext_sync_tikv_interop"]["df"], 
-    synthetic_experiments["synthetic_baseline_tikv_interop"]["df"], 
-    "interop"
-)
+# analyze_ext_sync_baseline(
+#     synthetic_experiments["synthetic_ext_sync_tikv_interop"]["df"], 
+#     synthetic_experiments["synthetic_baseline_tikv_interop"]["df"], 
+#     "interop"
+# )
 analyze_ext_sync_baseline(
     synthetic_experiments["synthetic_ext_sync_tikv_reps"]["df"], 
     synthetic_experiments["synthetic_baseline_tikv_reps"]["df"], 

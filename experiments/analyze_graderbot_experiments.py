@@ -4,6 +4,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({"text.usetex": True})
+plt.style.use("fivethirtyeight")
+
 # analyze the experiment results in given directory
 def analyze_dir(dir_path):
     results = pd.DataFrame(columns=["function", "launched", "completed", "remaining_workflow_len", "trial"])
@@ -46,13 +49,15 @@ ext_sync_function_means.to_csv("graderbot_tikv_ext_sync.csv")
 pct_improve = (baseline_function_means["graderbot_post_process"] - ext_sync_function_means["graderbot_post_process"]) / baseline_function_means["graderbot_post_process"] * 100
 print("External Synchrony Percent Improvement:", pct_improve)
 
+plt.figure(figsize=(10,6))
 plt.scatter(np.arange(len(baseline_function_means)), baseline_function_means / 10**6, label="baseline")
 plt.errorbar(np.arange(len(baseline_function_means)), baseline_function_means / 10**6, yerr=baseline_function_std / 10**6, fmt="o")
-plt.scatter(np.arange(len(ext_sync_function_means)), ext_sync_function_means / 10**6, label="ext_sync")
+plt.scatter(np.arange(len(ext_sync_function_means)), ext_sync_function_means / 10**6, label="ext\_sync")
 plt.errorbar(np.arange(len(ext_sync_function_means)), ext_sync_function_means / 10**6, yerr=ext_sync_function_std / 10**6, fmt="o")
-plt.title("External Synchrony vs Baseline on Graderbot Functions")
+plt.title("External Synchrony vs Baseline on Grading System")
 plt.ylabel("Function Completition Time (ms)")
 plt.xlabel("Function")
-plt.xticks(np.arange(len(baseline_function_means)), baseline_function_means.index, fontsize=6)
-plt.legend()
+plt.xticks(np.arange(len(baseline_function_means)), baseline_function_means.index.map(lambda s : s.replace("_", "\_")), fontsize=10)
+plt.legend(framealpha=0.5)
+plt.savefig("graderbot_tikv.png", format="png", dpi=600, transparent=True)
 plt.show()
