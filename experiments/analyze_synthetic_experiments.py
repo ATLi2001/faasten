@@ -195,11 +195,11 @@ for experiment in synthetic_experiments.keys():
 #     synthetic_experiments["synthetic_baseline_globaldb"]["df"], 
 #     "globaldb"
 # )
-# analyze_ext_sync_baseline(
-#     synthetic_experiments["synthetic_ext_sync_tikv_interop"]["df"], 
-#     synthetic_experiments["synthetic_baseline_tikv_interop"]["df"], 
-#     "interop"
-# )
+analyze_ext_sync_baseline(
+    synthetic_experiments["synthetic_ext_sync_tikv_interop"]["df"], 
+    synthetic_experiments["synthetic_baseline_tikv_interop"]["df"], 
+    "interop"
+)
 analyze_ext_sync_baseline(
     synthetic_experiments["synthetic_ext_sync_tikv_reps"]["df"], 
     synthetic_experiments["synthetic_baseline_tikv_reps"]["df"], 
