@@ -193,6 +193,7 @@ impl DbServer {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
+                    stream.set_nodelay(true).expect("set_nodelay call failed");
                     let arc_self_clone = arc_self.clone();
 
                     std::thread::spawn(move || {

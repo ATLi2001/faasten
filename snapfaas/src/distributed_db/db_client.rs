@@ -284,6 +284,8 @@ fn send_sc_get_response(sc: SC, stream: &mut TcpStream) -> Result<Vec<u8>, Error
 
     debug!("send sc, local: {}, peer: {}", stream.local_addr().unwrap(), stream.peer_addr().unwrap());
 
+    stream.set_nodelay(true).expect("set_nodelay call failed");
+
     let mut buf = Vec::new();
     buf.reserve(sc.encoded_len());
     sc.encode(&mut buf);
