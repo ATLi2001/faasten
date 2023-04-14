@@ -1,1 +1,1 @@
-{"at_gateway":104892533454630,"at_vmm":0,"arrived":104892533519421,"allocated":104892534086512,"launched":104893333246285,"completed":104912473265552,"request":{"function":"synthetic","payload":{"args":{"interop_compute_ms":50,"reps":100},"context":{},"workflow":[]}}}
+{"at_gateway":101755775612424,"at_vmm":0,"arrived":101755775679491,"allocated":101755776377714,"launched":101756752703043,"completed":101766637260005,"request":{"function":"synthetic","payload":{"args":{"interop_compute_ms":50,"reps":100},"context":{},"workflow":[]}}}
