@@ -124,7 +124,7 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
     plt.xlabel(xlabel)
     plt.legend(framealpha=0.5)
     plt.tight_layout()
-    plt.savefig("synthetic_tikv_{}.png".format(name), format="png", dpi=600, transparent=True)
+    plt.savefig("synthetic_tikv_{}.pdf".format(name), format="pdf", dpi=600, transparent=True)
     plt.show()
 
 
