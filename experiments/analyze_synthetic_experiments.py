@@ -35,6 +35,10 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
         label = "reps"
         xlabel = "Interoperation Delay (ms)"
 
+        # for interop, don't need 100 reps anymore
+        df_ext_sync = df_ext_sync[df_ext_sync["reps"] != 100]
+        df_baseline = df_baseline[df_baseline["reps"] != 100]
+
     if name == "reps":
         index_order = ["interop_compute_ms", "reps", "trial"]
         groupby_order = ["interop_compute_ms", "reps"]
