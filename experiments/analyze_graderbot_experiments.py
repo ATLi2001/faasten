@@ -57,7 +57,9 @@ plt.errorbar(np.arange(len(ext_sync_function_means)), ext_sync_function_means / 
 plt.title("External Synchrony vs Baseline on Grading System")
 plt.ylabel("Function Completition Time (ms)")
 plt.xlabel("Function")
-plt.xticks(np.arange(len(baseline_function_means)), baseline_function_means.index.map(lambda s : s.replace("_", "\_")), fontsize=10)
+xticks = baseline_function_means.index.map(lambda s : s.replace("_", "\_")).to_list()
+xticks[-1] = "post\_process"
+plt.xticks(np.arange(len(baseline_function_means)), xticks, fontsize=10)
 plt.legend(framealpha=0.5)
 plt.savefig("graderbot_tikv.pdf", format="pdf", dpi=600, transparent=True)
 plt.show()
