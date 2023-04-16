@@ -1,7 +1,14 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 
-plt.rcParams.update({"text.usetex": True})
+matplotlib.use("pgf")
+plt.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    "font.family": "serif",
+    "text.usetex": True,
+    "pgf.rcfonts": False,
+})
 plt.style.use("fivethirtyeight")
 
 execution_time = np.arange(200)
@@ -20,4 +27,4 @@ plt.xlabel("Execution Time")
 plt.legend(framealpha=0.5)
 plt.tight_layout()
 plt.savefig("theoretical.pdf", format="pdf", dpi=600, transparent=True)
-plt.show()
+# plt.show()

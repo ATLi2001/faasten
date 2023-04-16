@@ -2,9 +2,16 @@ import json
 import os
 import pandas as pd
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 
-plt.rcParams.update({"text.usetex": True})
+matplotlib.use("pgf")
+plt.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    "font.family": "serif",
+    "text.usetex": True,
+    "pgf.rcfonts": False,
+})
 plt.style.use("fivethirtyeight")
 
 # analyze the experiment results in given directory
@@ -126,10 +133,10 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
     plt.title("External Synchrony Improvement vs %s" % xlabel)
     plt.ylabel("Percent Improvment")
     plt.xlabel(xlabel)
-    plt.legend(framealpha=0.5)
+    plt.legend(framealpha=0.5, loc="lower right")
     plt.tight_layout()
     plt.savefig("synthetic_tikv_{}.pdf".format(name), format="pdf", dpi=600, transparent=True)
-    plt.show()
+    # plt.show()
 
 
 synthetic_experiments = {

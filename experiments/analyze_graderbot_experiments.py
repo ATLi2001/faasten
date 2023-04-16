@@ -2,9 +2,16 @@ import json
 import os
 import pandas as pd
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 
-plt.rcParams.update({"text.usetex": True})
+matplotlib.use("pgf")
+plt.rcParams.update({
+    "pgf.texsystem": "pdflatex",
+    "font.family": "serif",
+    "text.usetex": True,
+    "pgf.rcfonts": False,
+})
 plt.style.use("fivethirtyeight")
 
 # analyze the experiment results in given directory
@@ -61,5 +68,6 @@ xticks = baseline_function_means.index.map(lambda s : s.replace("_", "\_")).to_l
 xticks[-1] = "post\_process"
 plt.xticks(np.arange(len(baseline_function_means)), xticks, fontsize=10)
 plt.legend(framealpha=0.5)
+plt.tight_layout()
 plt.savefig("graderbot_tikv.pdf", format="pdf", dpi=600, transparent=True)
-plt.show()
+# plt.show()
