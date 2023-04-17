@@ -131,7 +131,7 @@ def analyze_ext_sync_baseline(df_ext_sync, df_baseline, name):
         )
     
     plt.title("External Synchrony Improvement vs %s" % xlabel)
-    plt.ylabel("Percent Improvment")
+    plt.ylabel("Percent Improvement")
     plt.xlabel(xlabel)
     plt.legend(framealpha=0.5, loc="lower right")
     plt.tight_layout()

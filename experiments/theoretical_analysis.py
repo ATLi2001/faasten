@@ -22,7 +22,7 @@ pct_improve = (baseline_time - ext_sync_time) / baseline_time * 100
 plt.figure(figsize=(10,6))
 plt.plot(execution_time, pct_improve, label="Write Time = %d" % write_time)
 plt.title("External Synchrony Theoretical Improvement")
-plt.ylabel("Percent Improvment")
+plt.ylabel("Percent Improvement")
 plt.xlabel("Execution Time")
 plt.legend(framealpha=0.5)
 plt.tight_layout()
